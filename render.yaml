@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: ifragment-bot
+    env: node
+    plan: free
+    buildCommand: npm install && npx @puppeteer/browsers install chrome@stable --path .cache
+    startCommand: npm start
+    envVars:
+      - key: PUPPETEER_CACHE_DIR
+        value: /opt/render/project/src/.cache
+      - key: PUPPETEER_EXECUTABLE_PATH
+        value: /opt/render/project/src/.cache/chrome/linux-stable/chrome-linux64/chrome
+      - key: TELEGRAM_API_ID
+        sync: false
+      - key: TELEGRAM_API_HASH
+        sync: false
+      - key: BOT_TOKEN
+        sync: false
+      - key: MARKETAPP_API_TOKEN
+        sync: false
+      - key: MONGO_URI
+        sync: false
+      - key: SEETG_API_TOKEN
+        sync: false
