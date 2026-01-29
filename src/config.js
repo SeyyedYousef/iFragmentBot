@@ -36,6 +36,10 @@ export const CONFIG = {
     ADMIN_ID: 5076130392,
     LIVE_TON_PRICE: 6.5,
 
+    // Channel membership settings
+    REQUIRED_CHANNEL: '@FragmentsCommunity',  // Channel username or ID for membership check
+    CHANNEL_LINK: 'https://t.me/FragmentCommunity',  // Link for users to join
+
     // Valuation Constants (ML-Calibrated from real data)
     FLOOR_4_CHAR: 5000,
     FLOOR_5_CHAR: 200,

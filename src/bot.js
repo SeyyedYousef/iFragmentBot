@@ -953,7 +953,7 @@ async function checkMembershipOrStop(ctx) {
         const isMember = await isChannelMember(ctx.from.id);
         if (!isMember) {
             try {
-                await ctx.answerCbQuery('❌ Join our channel to use this feature!', { show_alert: true });
+                await ctx.answerCbQuery(`❌ Join ${CONFIG.REQUIRED_CHANNEL} to use this feature!`, { show_alert: true });
             } catch (e) {
                 // Callback may have expired, ignore
             }
@@ -1237,7 +1237,7 @@ bot.action('check_membership', async (ctx) => {
         await ctx.answerCbQuery('✅ Welcome!');
         await sendDashboard(ctx, true);
     } else {
-        await ctx.answerCbQuery('❌ You are not a member yet! Please join the channel first.', { show_alert: true });
+        await ctx.answerCbQuery(`❌ You are not a member yet! Please join ${CONFIG.REQUIRED_CHANNEL} first.`, { show_alert: true });
         // Refresh join message
         try { await ctx.deleteMessage(); } catch (e) { }
         return sendJoinChannelMessage(ctx);
