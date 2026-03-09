@@ -1,0 +1,37 @@
+{
+  "name": "ifragment-bot",
+  "version": "1.0.0",
+  "description": "Telegram bot for Fragment username analysis with AI",
+  "main": "src/App/bot.entry.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/App/bot.entry.js",
+    "dev": "node --watch src/App/bot.entry.js",
+    "postinstall": "npx puppeteer browsers install chrome",
+    "build": "npm install && npx @puppeteer/browsers install chrome@stable --path .cache"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.6.2",
+    "bottleneck": "^2.19.5",
+    "csv-parse": "^6.1.0",
+    "dotenv": "^17.3.1",
+    "generic-pool": "^3.9.0",
+    "https-proxy-agent": "^7.0.6",
+    "mongodb": "^6.3.0",
+    "node-fetch": "^3.3.2",
+    "p-queue": "^8.0.1",
+    "puppeteer": "^23.0.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "telegraf": "^4.15.0",
+    "telegram": "^2.26.22"
+  },
+  "keywords": [
+    "telegram",
+    "bot",
+    "fragment",
+    "ai"
+  ],
+  "author": "",
+  "license": "MIT"
+}

@@ -1,0 +1,89 @@
+﻿bot.start(async (ctx) => {
+    // Handle Referral Payload
+    if (ctx.payload && ctx.payload.startsWith('ref_')) {
+        const referrerId = ctx.payload.replace('ref_', '');
+        if (referrerId && /^\d+$/.test(referrerId)) {
+            // Process referral asynchronously
+            processReferral(ctx.from.id, parseInt(referrerId)).then(result => {
+                if (result.success && result.rewardGiven) {
+                    // Notify referrer about reward
+                    bot.telegram.sendMessage(result.referrerId, `
+≡ƒÄë *Congratulations!*
+
+You invited 5 friends and earned *7 Days of Premium*! ≡ƒîƒ
+
+Thank you for supporting our community! ≡ƒÜÇ
+`, { parse_mode: 'Markdown' }).catch(() => { });
+                } else if (result.success) {
+                    // Notify referrer about new invite
+                    bot.telegram.sendMessage(result.referrerId, `
+≡ƒæñ *New Referral!*
+
+A new user joined via your link!
+You have invited: *${result.referralCount}/5* friends.
+
+_Invite ${5 - (result.referralCount % 5)} more to get Free Premium!_
+`, { parse_mode: 'Markdown' }).catch(() => { });
+                }
+            }).catch(err => console.error('Referral error:', err));
+        }
+    }
+
+    // Membership check removed from start - moved to specific features
+
+    return sendDashboard(ctx, false);
+});
+
+// Check membership handler
+bot.action('check_membership', async (ctx) => {
+    const isMember = await isChannelMember(ctx.from.id);
+
+    if (isMember) {
+        await ctx.answerCbQuery('Γ£à Welcome!');
+        await sendDashboard(ctx, true);
+    } else {
+        await ctx.answerCbQuery(`Γ¥î You are not a member yet! Please join ${CONFIG.REQUIRED_CHANNEL} first.`, { show_alert: true });
+        // Refresh join message
+        try { await ctx.deleteMessage(); } catch (e) { }
+        return sendJoinChannelMessage(ctx);
+    }
+});
+
+
+// Help
+bot.help((ctx) => ctx.replyWithMarkdown(`
+≡ƒîƒ *${CONFIG.BOT_NAME} Help*
+
+Send any username to get complete market analysis.
+`));
+
+// ==================== ADMIN PANEL ====================
+
+
+
+// /panel command - Admin only
+// /panel command - Admin only
+bot.command('panel', async (ctx) => {
+    if (!isAdmin(ctx.from.id)) {
+        return ctx.reply('Γ¥î Access denied. Admin only.');
+    }
+
+    const stats = getStats();
+    const limiterStats = getLimiterStats();
+
+    await ctx.replyWithMarkdown(`
+≡ƒöÉ *Admin Panel*
+
+≡ƒôè *Quick Stats:*
+ΓÇó Total Users: ${stats.totalUsers}
+ΓÇó Premium: ${stats.premiumUsers} ≡ƒîƒ
+ΓÇó Free: ${stats.freeUsers}
+ΓÇó Blocked: ${stats.blockedUsers} ≡ƒÜ½
+
+≡ƒÜª *System Load:*
+ΓÇó Active requests: ${limiterStats.global.running}
+ΓÇó Queued: ${limiterStats.global.queued}
+
+Choose an action:
+`, {
+        reply_markup: {

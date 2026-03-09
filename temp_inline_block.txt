@@ -1,0 +1,173 @@
+﻿bot.on('inline_query', async (ctx) => {
+    const query = ctx.inlineQuery.query.trim();
+    const userId = ctx.from.id;
+
+    if (!query) {
+        // Empty query - Show suggestions
+        return ctx.answerInlineQuery([
+            {
+                type: 'article',
+                id: 'help_username',
+                title: '≡ƒæñ Search Username',
+                description: 'Type @username to analyze value',
+                thumb_url: 'https://fragment.com/img/fragment_logo.png', // Fallback or specific icon
+                input_message_content: {
+                    message_text: 'To analyze a username, type: `@iFragmentBot @username`',
+                    parse_mode: 'Markdown'
+                }
+            },
+            {
+                type: 'article',
+                id: 'help_gift',
+                title: '≡ƒÄü Search Gift',
+                description: 'Paste a gift link to analyze',
+                thumb_url: 'https://nft.fragment.com/img/gifts/gift_standard.png', // Example icon
+                input_message_content: {
+                    message_text: 'To analyze a gift, type: `@iFragmentBot https://t.me/nft/...`',
+                    parse_mode: 'Markdown'
+                }
+            }
+        ], { cache_time: 300, is_personal: true });
+    }
+
+    const results = [];
+
+    // 1. Handle Gift Link
+    const giftParsed = parseGiftLink(query);
+    if (giftParsed.isValid) {
+        results.push({
+            type: 'article',
+            id: `gift_${Date.now()}`,
+            title: `≡ƒÄü Analyze Gift: ${giftParsed.modelName || 'Gift'}`,
+            description: `Model: ${giftParsed.modelName} #${giftParsed.pattern || '?'} - Click to generate full report`,
+            thumb_url: 'https://nft.fragment.com/img/gifts/gift_premium.png', // Generic gift icon
+            input_message_content: {
+                message_text: `!Gifts ${query}`, // Trigger the group command
+                parse_mode: 'Markdown'
+            }
+        });
+
+        // Add specific item option if possible (mocked for now as we can't scrape inside inline fast enough)
+        return ctx.answerInlineQuery(results, { cache_time: 0 });
+    }
+
+    // 2. Handle Wallet Address
+    if (query.length > 40 || query.startsWith('UQ') || query.startsWith('EQ')) {
+        results.push({
+            type: 'article',
+            id: `wallet_${Date.now()}`,
+            title: `≡ƒÆ╝ Track Wallet`,
+            description: `${query.substring(0, 10)}...${query.substring(query.length - 5)}`,
+            thumb_url: 'https://ton.org/download/ton_symbol.png', // TON Logo
+            input_message_content: {
+                message_text: `!Wallet ${query}`,
+                parse_mode: 'Markdown'
+            }
+        });
+        return ctx.answerInlineQuery(results, { cache_time: 300 });
+    }
+
+    // 3. Handle Username (@username or username)
+    const potentialUsername = query.replace('@', '').toLowerCase();
+    if (/^[a-zA-Z0-9_]{4,32}$/.test(potentialUsername)) {
+
+        // Option 1: Quick Analysis (Trigger Command)
+        results.push({
+            type: 'article',
+            id: `user_${potentialUsername}`,
+            title: `≡ƒÆÄ Analyze @${potentialUsername}`,
+            description: 'Click to generate valuation report',
+            thumb_url: 'https://fragment.com/img/fragment_logo.png',
+            input_message_content: {
+                message_text: `!Username @${potentialUsername}`, // Trigger the group command
+                parse_mode: 'Markdown'
+            }
+        });
+
+
+
+        // Option 2: Wallet lookup by username
+        results.push({
+            type: 'article',
+            id: `wallet_${potentialUsername}`,
+            title: `≡ƒÆ╝ Portfolio: @${potentialUsername}`,
+            description: 'Find owner wallet & assets',
+            thumb_url: 'https://ton.org/download/ton_symbol.png',
+            input_message_content: {
+                message_text: `!Wallet @${potentialUsername}`,
+                parse_mode: 'Markdown'
+            }
+        });
+
+        // Option 3: Compare (if previously cached or simple heuristic)
+        // For now, simple trigger is safest to ensure premium checks run in chat
+    }
+
+    return ctx.answerInlineQuery(results, { cache_time: 300 });
+});
+
+// Handle messages
+bot.on('text', async (ctx) => {
+    const input = ctx.message.text.trim();
+    if (input.startsWith('/')) return;
+
+    const chatId = ctx.chat.id;
+    const userId = ctx.from.id;
+    const userState = userStates.get(chatId);
+
+    // ==================== GROUP COMMAND HANDLER ====================
+    if (ctx.chat.type === 'group' || ctx.chat.type === 'supergroup') {
+        if (input.startsWith('!')) {
+            await handleGroupCommand(ctx, input);
+            return;
+        }
+    }
+
+    // ==================== TELEGRAM LOGIN FLOW (PRIORITY) ====================
+
+    // Handle phone number input for Telegram login
+    if (userState && userState.action === 'awaiting_phone' && isAdmin(userId)) {
+        const phonePattern = /^\+?\d{10,15}$/;
+        if (phonePattern.test(input)) {
+            // IMMEDIATELY set state to processing to prevent other handlers from processing
+            userStates.set(chatId, { action: 'phone_processing', phone: input });
+
+            const msg = await ctx.reply('≡ƒôñ Sending verification code...');
+
+            try {
+                const tc = await getTelegramClient();
+                const result = tc ? await tc.startLogin(input) : { success: false, error: 'Service not available' };
+
+                console.log('≡ƒô▒ startLogin result:', result);
+
+                if (result.success) {
+                    userStates.set(chatId, { action: 'awaiting_code', phone: input });
+                    await ctx.telegram.editMessageText(
+                        chatId, msg.message_id, null,
+                        'Γ£à Code sent!\n\n≡ƒöÉ Please enter the verification code you received:',
+                        { reply_markup: { inline_keyboard: [[{ text: '≡ƒöä Resend Code', callback_data: 'panel_resend_code' }], [{ text: 'Γ¥î Cancel', callback_data: 'panel_cancel_login' }]] } }
+                    );
+                } else {
+                    userStates.delete(chatId);
+                    await ctx.telegram.editMessageText(
+                        chatId, msg.message_id, null,
+                        `Γ¥î Failed to send code: ${result.error}\n\nPlease try again with /panel`
+                    );
+                }
+            } catch (error) {
+                console.error('Γ¥î Phone handler error:', error);
+                userStates.delete(chatId);
+                await ctx.telegram.editMessageText(
+                    chatId, msg.message_id, null,
+                    `Γ¥î Error: ${error.message}\n\nPlease try again with /panel`
+                );
+            }
+            return; // IMPORTANT: Stop processing here
+        }
+        // If phone pattern doesn't match, still return to avoid username handler
+        return;
+    }
+
+    // Handle Proxy Input
+    if (userState && userState.action === 'awaiting_proxy_input' && isAdmin(userId)) {
+        if (input.toLowerCase() === 'clear' || input.toLowerCase() === 'none') {

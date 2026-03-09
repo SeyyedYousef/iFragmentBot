@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;700;900&family=Inter:wght@400;600&display=swap"
+        rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1080px;
+            height: 1080px;
+            background: #000;
+            font-family: 'Inter', sans-serif;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* --- Dynamic Background --- */
+        .bg-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            overflow: hidden;
+        }
+
+        .bg-gradient {
+            position: absolute;
+            width: 150%;
+            height: 150%;
+            top: -25%;
+            left: -25%;
+            background: radial-gradient(circle at 50% 50%, rgba(20, 20, 20, 1) 0%, rgba(0, 0, 0, 1) 80%);
+            z-index: 1;
+        }
+
+        .glow-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(120px);
+            opacity: 0.4;
+            z-index: 2;
+            animation: float 10s infinite ease-in-out alternate;
+        }
+
+        .orb-1 {
+            width: 600px;
+            height: 600px;
+            background: #007aff;
+            top: -100px;
+            left: -100px;
+        }
+
+        .orb-2 {
+            width: 500px;
+            height: 500px;
+            background: #9d00ff;
+            bottom: -50px;
+            right: -50px;
+            animation-delay: -5s;
+        }
+
+        .orb-3 {
+            width: 300px;
+            height: 300px;
+            background: #00ffcc;
+            bottom: 20%;
+            left: 20%;
+            opacity: 0.2;
+            filter: blur(80px);
+        }
+
+        @keyframes float {
+            0% {
+                transform: translate(0, 0) scale(1);
+            }
+
+            100% {
+                transform: translate(50px, 30px) scale(1.1);
+            }
+        }
+
+        /* --- Glass Card --- */
+        .glass-card {
+            z-index: 10;
+            width: 920px;
+            height: 920px;
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(80px);
+            border: 2px solid rgba(255, 255, 255, 0.08);
+            border-radius: 80px;
+            box-shadow:
+                0 50px 100px -20px rgba(0, 0, 0, 0.7),
+                inset 0 0 80px rgba(255, 255, 255, 0.02);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 70px;
+            overflow: hidden;
+        }
+
+        .card-shimmer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(120deg, transparent 30%, rgba(255, 255, 255, 0.05) 50%, transparent 70%);
+            z-index: 1;
+        }
+
+        /* --- Header --- */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 2;
+        }
+
+        .header-left {
+            display: flex;
+            gap: 20px;
+        }
+
+        .pill {
+            background: rgba(255, 255, 255, 0.08);
+            padding: 14px 36px;
+            border-radius: 100px;
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .pill.golden {
+            background: linear-gradient(135deg, rgba(255, 215, 0, 0.2), rgba(255, 140, 0, 0.1));
+            border-color: rgba(255, 215, 0, 0.4);
+            color: #ffd700;
+            text-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+        }
+
+        .logo {
+            font-family: 'Unbounded', sans-serif;
+            font-size: 24px;
+            font-weight: 900;
+            color: rgba(255, 255, 255, 0.2);
+            letter-spacing: 4px;
+        }
+
+        /* --- Main Content --- */
+        .content {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 2;
+            text-align: center;
+            position: relative;
+        }
+
+        .username-container {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+            /* Debugging bounds */
+            /* border: 1px solid red; */
+        }
+
+        .username {
+            font-family: 'Unbounded', sans-serif;
+            font-weight: 900;
+            line-height: 1.1;
+            white-space: nowrap;
+
+            /* Powerful Premium Gradient */
+            background: linear-gradient(180deg, #ffffff 0%, #a0a0a0 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+
+            filter: drop-shadow(0 20px 40px rgba(0, 0, 0, 0.5));
+            /* Initial size, will be adjusted by JS */
+            font-size: 140px;
+            text-transform: none;
+            /* Keep original casing if desired, or lowercase */
+        }
+
+        .username-glow {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%;
+            height: 150px;
+            background: linear-gradient(90deg, #007aff, #9d00ff);
+            filter: blur(100px);
+            opacity: 0.2;
+            z-index: -1;
+        }
+
+        /* --- Footer Stats --- */
+        .footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            z-index: 2;
+            padding-top: 40px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .stat-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .stat-label {
+            font-size: 18px;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            color: rgba(255, 255, 255, 0.4);
+            font-weight: 600;
+        }
+
+        .price-row {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .price-ton {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            font-family: 'Unbounded', sans-serif;
+            font-size: 64px;
+            font-weight: 800;
+            color: white;
+            text-shadow: 0 0 30px rgba(0, 152, 234, 0.3);
+        }
+
+        .ton-icon {
+            width: 54px;
+            height: 54px;
+            filter: drop-shadow(0 0 15px rgba(0, 152, 234, 0.6));
+        }
+
+        .price-usd {
+            font-size: 32px;
+            color: rgba(255, 255, 255, 0.5);
+            font-weight: 500;
+            margin-top: 15px;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(0, 255, 136, 0.1);
+            padding: 10px 20px;
+            border-radius: 50px;
+            border: 1px solid rgba(0, 255, 136, 0.2);
+            color: #00ff88;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-size: 16px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            background: #00ff88;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #00ff88;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Background Layers -->
+    <div class="bg-layer">
+        <div class="bg-gradient"></div>
+        <div class="glow-orb orb-1"></div>
+        <div class="glow-orb orb-2"></div>
+        <div class="glow-orb orb-3"></div>
+    </div>
+
+    <div class="glass-card">
+        <div class="card-shimmer"></div>
+
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                <div class="pill golden">{{RARITY_TIER}}</div>
+            </div>
+            <div class="logo">{{BOT_NAME}}</div>
+        </div>
+
+        <!-- Center Content -->
+        <div class="content">
+            <div class="username-glow"></div>
+            <div class="username-container">
+                <div class="username" id="usernameRef">@{{USERNAME}}</div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <div class="stat-group">
+                <div class="stat-label">Estimated Value</div>
+                <div class="price-row">
+                    <div class="price-ton">
+                        <svg class="ton-icon" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path
+                                d="M28 56C43.464 56 56 43.464 56 28C56 12.536 43.464 0 28 0C12.536 0 0 12.536 0 28C0 43.464 12.536 56 28 56Z"
+                                fill="#0098EA" />
+                            <path
+                                d="M37.5603 15.6277H18.4386C14.9228 15.6277 12.6944 19.4202 14.4632 22.4861L26.2644 42.9409C27.0345 44.2765 28.9644 44.2765 29.7345 42.9409L41.5765 22.4861C43.3045 19.4202 41.0761 15.6277 37.5765 15.6277H37.5603ZM26.2483 36.8068L23.6119 31.8097L17.2017 20.6506C16.6742 19.7557 17.3255 18.6198 18.4223 18.6198H26.2483V36.8068ZM38.7972 20.6506L32.387 31.8259L29.7506 36.8068V18.6361H37.5765C38.6734 18.6361 39.3247 19.772 38.7972 20.6669V20.6506Z"
+                                fill="white" />
+                        </svg>
+                        {{EST_VALUE_TON}}
+                    </div>
+                </div>
+            </div>
+
+            <div class="stat-group" style="align-items: flex-end;">
+                <div class="status-indicator">
+                    <div class="status-dot"></div>
+                    {{STATUS_TEXT}}
+                </div>
+                <!-- <div class="price-usd" style="margin-top: 5px;">≈ ${{EST_VALUE_USD}}</div> -->
+                <!-- Moved USD price here for balance -->
+                <div class="price-usd">≈ ${{EST_VALUE_USD}}</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Dynamic Font Sizing Algorithm
+        function adjustTextSize() {
+            const container = document.querySelector('.username-container');
+            const textElement = document.getElementById('usernameRef');
+            const maxWidth = container.offsetWidth;
+            const textContent = textElement.textContent;
+
+            // Base font size
+            let fontSize = 160;
+            textElement.style.fontSize = fontSize + 'px';
+
+            // Reduce size until it fits
+            while (textElement.scrollWidth > maxWidth && fontSize > 40) {
+                fontSize -= 5;
+                textElement.style.fontSize = fontSize + 'px';
+            }
+
+            // Additional logic for very long strings or very short ones
+            if (textContent.length <= 4) {
+                // Massive boost for short names like @ali
+                fontSize = 200;
+                textElement.style.fontSize = fontSize + 'px';
+            }
+        }
+
+        // Run on load
+        window.onload = adjustTextSize;
+    </script>
+</body>
+
+</html>
