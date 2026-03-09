@@ -97,49 +97,72 @@ async function migrateToDatabase() {
  */
 export async function loadAccounts() {
     try {
-        // Check if migration is needed
-        const count = dbAccounts.count();
-        if (count === 0 && fs.existsSync(SESSIONS_FILE)) {
-            await migrateToDatabase();
+        const { loadAccounts: loadAccountsFromMongo, countAccounts: countFromMongo } = await import('../../../Shared/Infra/Database/mongo.repository.js');
+
+        // 1. Check if we need to migrate from SQLite to MongoDB
+        const mongoCount = await countFromMongo();
+        if (mongoCount === 0) {
+            const sqliteCount = dbAccounts.count();
+            if (sqliteCount > 0) {
+                console.log(`🔄 Found ${sqliteCount} accounts in SQLite but 0 in MongoDB. Starting migration...`);
+                const sqliteAccounts = dbAccounts.getAll();
+                const { saveAccount: saveToMongo } = await import('../../../Shared/Infra/Database/mongo.repository.js');
+
+                for (const acc of sqliteAccounts) {
+                    await saveToMongo({
+                        ...acc,
+                        id: acc.user_id,
+                        firstName: acc.firstName,
+                        lastName: acc.lastName,
+                        session: acc.session // Already encrypted in SQLite
+                    });
+                }
+                console.log('✅ SQLite to MongoDB migration completed.');
+            } else if (fs.existsSync(SESSIONS_FILE)) {
+                // Legacy JSON migration still supported
+                await migrateToDatabase();
+            }
         }
 
-        // Load from DB
-        const dbRows = dbAccounts.getAll();
+        // 2. Load from MongoDB
+        const dbRows = await loadAccountsFromMongo();
 
         accounts = dbRows.map(row => {
             let session = row.session;
             // Assuming DB stores encrypted session string
             // We try to decrypt it for memory usage
             try {
-                if (session && row.session.includes(':') && row.session.length > 50) {
-                    session = decrypt(row.session);
+                if (session && session.includes(':') && session.length > 50) {
+                    session = decrypt(session);
                 }
-            } catch (e) { console.warn(`Failed to decrypt session used for ${row.phone}`); }
+            } catch (e) {
+                console.warn(`Failed to decrypt session used for ${row.phone}`);
+            }
 
             return {
-                id: row.user_id,
+                id: row.user_id || row.id,
                 phone: row.phone,
                 username: row.username,
                 firstName: row.firstName,
                 lastName: row.lastName,
                 session: session, // Decrypted in memory
-                encrypted: true, // Flag to indicate it SHOULD be encrypted when saving (if we were saving to JSON)
+                encrypted: true,
                 status: row.status,
                 isActive: row.isActive,
                 role: row.role,
                 proxy: row.proxy,
                 addedAt: row.addedAt,
                 lastConnected: row.lastConnected,
-                stats: {
-                    requestsToday: row.stats?.requestsToday || 0,
-                    failedRequests: row.stats?.failedRequests || 0,
-                    lastActive: row.stats?.lastActive || null,
-                    totalRequests: row.stats?.totalRequests || 0
+                stats: row.stats || {
+                    requestsToday: 0,
+                    failedRequests: 0,
+                    lastActive: null,
+                    totalRequests: 0
                 }
             };
         });
 
-        console.log(`📂 Loaded ${accounts.length} accounts from Database.`);
+        console.log(`📂 Loaded ${accounts.length} accounts from MongoDB.`);
         return true;
 
     } catch (error) {
@@ -154,14 +177,17 @@ export async function loadAccounts() {
 /**
  * Save single account to DB (Helper)
  */
-function saveAccountToDb(account) {
+async function saveAccountToDb(account) {
     try {
+        const { saveAccount: saveAccountToMongo } = await import('../../../Shared/Infra/Database/mongo.repository.js');
+
         // Create copy for DB with encrypted session
         const dbAccount = {
             ...account,
             session: account.session ? encrypt(account.session) : ''
         };
-        dbAccounts.save(dbAccount);
+
+        await saveAccountToMongo(dbAccount);
     } catch (error) {
         console.error(`Failed to save account ${account.phone}:`, error);
     }
@@ -178,14 +204,11 @@ export async function saveAccounts(immediate = false) {
 
     const doSave = async () => {
         try {
-            console.log('💾 Syncing accounts to Database...');
+            console.log('💾 Syncing accounts to MongoDB...');
 
-            // Use transaction for bulk update
-            transaction(() => {
-                for (const acc of accounts) {
-                    saveAccountToDb(acc);
-                }
-            })();
+            for (const acc of accounts) {
+                await saveAccountToDb(acc);
+            }
 
         } catch (error) {
             console.error('❌ Error saving accounts:', error.message);
@@ -449,7 +472,7 @@ export async function addSession(phoneNumber, sessionString, user) {
     }
 
     try {
-        saveAccountToDb(newAccount);
+        await saveAccountToDb(newAccount);
     } catch (e) { console.error('Error saving new account to DB', e); }
 
     // Connect immediately
@@ -737,8 +760,13 @@ export async function removeAccount(phoneNumber) {
 
     accounts = accounts.filter(a => a.phone !== phoneNumber);
 
-    // Remove from DB
-    dbAccounts.delete(phoneNumber);
+    // Remove from MongoDB
+    try {
+        const { deleteAccount } = await import('../../../Shared/Infra/Database/mongo.repository.js');
+        await deleteAccount(phoneNumber);
+    } catch (error) {
+        console.error('Failed to remove account from MongoDB:', error.message);
+    }
 
     console.log(`🗑️ Account removed: ${hashForLog(phoneNumber)}`);
     return true;

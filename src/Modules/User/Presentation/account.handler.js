@@ -893,8 +893,9 @@ Session String اکانت را ارسال کنید.
         await ctx.answerCbQuery('⏳ ارسال کد...');
 
         try {
-            const { sendLoginCode } = await import('../services/authService.js');
-            const { phoneHash } = await sendLoginCode(phone);
+            const tc = await import('../../../Shared/Infra/Telegram/telegram.client.js');
+            const result = await tc.startLogin(phone);
+            const { phoneHash } = result;
 
             userStates.set(ctx.chat.id, {
                 action: 'awaiting_login_code',

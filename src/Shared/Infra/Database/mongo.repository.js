@@ -246,3 +246,87 @@ export async function saveMeCache(userId, data) {
         return false;
     }
 }
+/**
+ * Save account to MongoDB
+ * @param {Object} account - Account object with session, phone, etc.
+ */
+export async function saveAccount(account) {
+    if (!db) return false;
+
+    try {
+        await db.collection('accounts').updateOne(
+            { phone: account.phone },
+            {
+                $set: {
+                    phone: account.phone,
+                    user_id: account.id,
+                    username: account.username,
+                    firstName: account.firstName,
+                    lastName: account.lastName,
+                    session: account.session, // Already encrypted
+                    isActive: account.isActive,
+                    status: account.status,
+                    role: account.role,
+                    proxy: account.proxy,
+                    stats: account.stats,
+                    addedAt: account.addedAt,
+                    lastConnected: account.lastConnected,
+                    updatedAt: new Date()
+                },
+                $setOnInsert: { createdAt: new Date() }
+            },
+            { upsert: true }
+        );
+        return true;
+    } catch (error) {
+        console.error('Failed to save account:', error.message);
+        return false;
+    }
+}
+
+/**
+ * Load all accounts from MongoDB
+ */
+export async function loadAccounts() {
+    if (!db) {
+        // Try to connect if not connected
+        await connectDB();
+        if (!db) return [];
+    }
+
+    try {
+        const accounts = await db.collection('accounts').find({}).toArray();
+        return accounts;
+    } catch (error) {
+        console.error('Failed to load accounts:', error.message);
+        return [];
+    }
+}
+
+/**
+ * Delete account from MongoDB
+ */
+export async function deleteAccount(phone) {
+    if (!db) return false;
+
+    try {
+        await db.collection('accounts').deleteOne({ phone: phone });
+        return true;
+    } catch (error) {
+        console.error('Failed to delete account:', error.message);
+        return false;
+    }
+}
+
+/**
+ * Count accounts in MongoDB
+ */
+export async function countAccounts() {
+    if (!db) return 0;
+
+    try {
+        return await db.collection('accounts').countDocuments();
+    } catch (error) {
+        return 0;
+    }
+}
