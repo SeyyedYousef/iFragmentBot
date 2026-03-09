@@ -490,7 +490,7 @@ class JobQueue {
 }
 
 // ==================== SINGLETON INSTANCE ====================
-const jobQueue = new JobQueue();
+export const jobQueue = new JobQueue();
 
 // ==================== HELPER FUNCTIONS ====================
 
