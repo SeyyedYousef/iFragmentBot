@@ -5,7 +5,7 @@
  */
 
 import fetch from 'node-fetch';
-import { loadSeeTgToken, saveSeeTgToken } from '../../Shared/Infra/Database/mongo.repository.js';
+import { loadSeeTgToken, saveSeeTgToken } from '../../../Shared/Infra/Database/mongo.repository.js';
 
 // API Configuration
 const SEETG_API_BASE = 'https://poso.see.tg/api';
