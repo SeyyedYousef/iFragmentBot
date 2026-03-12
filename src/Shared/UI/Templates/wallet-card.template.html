@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;700;900&family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            width: 1080px; height: 1080px; background: #04060f;
+            font-family: 'Inter', sans-serif; color: white;
+            display: flex; align-items: center; justify-content: center;
+            overflow: hidden; position: relative;
+        }
+
+        /* === ANIMATED BACKGROUND === */
+        .bg-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 0; overflow: hidden;
+        }
+        .bg-gradient {
+            position: absolute; width: 100%; height: 100%;
+            background: linear-gradient(145deg, #04060f 0%, #0a0e1a 40%, #0d1225 100%);
+            z-index: 1;
+        }
+        .glow-orb {
+            position: absolute; border-radius: 50%; filter: blur(120px); z-index: 2;
+        }
+        .orb-1 { width: 600px; height: 600px; background: rgba(0, 136, 234, 0.15); top: -150px; left: -100px; }
+        .orb-2 { width: 500px; height: 500px; background: rgba(92, 0, 210, 0.12); bottom: -80px; right: -50px; }
+        .orb-3 { width: 300px; height: 300px; background: rgba(0, 255, 136, 0.06); top: 50%; left: 50%; transform: translate(-50%, -50%); }
+
+        /* === GRID PATTERN === */
+        .grid-pattern {
+            position: absolute; width: 100%; height: 100%; z-index: 3;
+            background-image:
+                linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+            background-size: 60px 60px;
+        }
+
+        /* === MAIN CARD === */
+        .glass-card {
+            z-index: 10; width: 980px; height: 980px;
+            background: linear-gradient(145deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%);
+            backdrop-filter: blur(40px);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 48px;
+            padding: 60px;
+            display: flex; flex-direction: column; justify-content: space-between;
+            position: relative; overflow: hidden;
+            box-shadow:
+                0 0 0 1px rgba(255,255,255,0.03),
+                0 40px 80px -20px rgba(0,0,0,0.6),
+                inset 0 1px 0 rgba(255,255,255,0.05);
+        }
+        .card-shine {
+            position: absolute; top: 0; left: 0; width: 100%; height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1) 30%, rgba(255,255,255,0.2) 50%, rgba(255,255,255,0.1) 70%, transparent);
+        }
+
+        /* === HEADER === */
+        .header { display: flex; justify-content: space-between; align-items: flex-start; z-index: 5; }
+        .wallet-info { display: flex; flex-direction: column; gap: 8px; }
+        .brand-tag {
+            font-size: 13px; text-transform: uppercase; letter-spacing: 5px;
+            color: rgba(0, 136, 234, 0.6); font-weight: 700;
+        }
+        .address {
+            font-family: 'Unbounded', sans-serif; font-size: 28px; font-weight: 700;
+            color: rgba(255,255,255,0.9); letter-spacing: 1px;
+        }
+        .rank-badge {
+            display: flex; align-items: center; gap: 10px;
+            background: linear-gradient(135deg, rgba(0,136,234,0.15), rgba(92,0,210,0.15));
+            padding: 14px 28px; border-radius: 40px;
+            font-size: 18px; font-weight: 800; text-transform: uppercase;
+            letter-spacing: 2px;
+            border: 1px solid rgba(0,136,234,0.2);
+            box-shadow: 0 0 30px rgba(0,136,234,0.1);
+        }
+
+        /* === NET WORTH CENTER === */
+        .center-section {
+            display: flex; flex-direction: column; align-items: center;
+            gap: 10px; z-index: 5; flex-grow: 1; justify-content: center;
+        }
+        .nw-label {
+            font-size: 15px; color: rgba(255,255,255,0.35); letter-spacing: 6px;
+            text-transform: uppercase; font-weight: 600;
+        }
+        .nw-value {
+            font-family: 'Unbounded', sans-serif; font-size: 96px; font-weight: 900;
+            display: flex; align-items: center; gap: 24px;
+            background: linear-gradient(180deg, #ffffff 20%, rgba(255,255,255,0.5) 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text;
+            filter: drop-shadow(0 0 40px rgba(255,255,255,0.1));
+            line-height: 1;
+        }
+        .nw-ton-logo { width: 72px; height: 72px; filter: drop-shadow(0 0 20px rgba(0,152,234,0.4)); }
+        .nw-usd {
+            font-size: 22px; color: rgba(255,255,255,0.3); font-weight: 400;
+            letter-spacing: 2px; margin-top: 4px;
+        }
+
+        /* === ASSET GRID === */
+        .asset-grid {
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; width: 100%;
+            margin-top: 30px; z-index: 5;
+        }
+        .asset-item {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.04);
+            border-radius: 28px; padding: 28px 20px;
+            display: flex; flex-direction: column; align-items: center; gap: 8px;
+            position: relative; overflow: hidden;
+        }
+        .asset-item::after {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+        }
+        .asset-icon { font-size: 28px; margin-bottom: 4px; }
+        .asset-count {
+            font-family: 'Unbounded', sans-serif; font-size: 36px; font-weight: 800;
+            color: #fff; line-height: 1;
+        }
+        .asset-name {
+            font-size: 13px; text-transform: uppercase; letter-spacing: 3px;
+            color: rgba(255,255,255,0.35); font-weight: 600;
+        }
+
+        /* === FOOTER === */
+        .footer {
+            display: flex; justify-content: space-between; align-items: flex-end;
+            z-index: 5; padding-top: 30px;
+            border-top: 1px solid rgba(255,255,255,0.04);
+        }
+        .footer-item { display: flex; flex-direction: column; gap: 6px; }
+        .f-label { font-size: 12px; text-transform: uppercase; color: rgba(255,255,255,0.25); letter-spacing: 3px; font-weight: 600; }
+        .f-value { font-size: 18px; font-weight: 600; color: rgba(255,255,255,0.7); }
+        .status-tag {
+            background: rgba(0,255,136,0.06);
+            color: #00ff88; padding: 10px 22px; border-radius: 24px;
+            font-size: 14px; font-weight: 700; letter-spacing: 2px;
+            border: 1px solid rgba(0,255,136,0.12);
+        }
+
+        /* === BOTTOM BRANDING === */
+        .branding {
+            position: absolute; bottom: 20px; left: 0; right: 0;
+            text-align: center; z-index: 5;
+            font-size: 12px; color: rgba(255,255,255,0.12);
+            letter-spacing: 4px; text-transform: uppercase;
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-layer">
+        <div class="bg-gradient"></div>
+        <div class="grid-pattern"></div>
+        <div class="glow-orb orb-1"></div>
+        <div class="glow-orb orb-2"></div>
+        <div class="glow-orb orb-3"></div>
+    </div>
+
+    <div class="glass-card">
+        <div class="card-shine"></div>
+
+        <div class="header">
+            <div class="wallet-info">
+                <div class="brand-tag">iFragment • Wallet</div>
+                <div class="address">{{ADDRESS}}</div>
+            </div>
+            <div class="rank-badge">{{RANK_EMOJI}} {{RANK}}</div>
+        </div>
+
+        <div class="center-section">
+            <div class="asset-grid">
+                <div class="asset-item">
+                    <div class="asset-icon">💎</div>
+                    <div class="asset-count">{{USERNAMES}}</div>
+                    <div class="asset-name">Usernames</div>
+                </div>
+                <div class="asset-item">
+                    <div class="asset-icon">📱</div>
+                    <div class="asset-count">{{NUMBERS}}</div>
+                    <div class="asset-name">+888 Numbers</div>
+                </div>
+                <div class="asset-item">
+                    <div class="asset-icon">🎁</div>
+                    <div class="asset-count">{{GIFTS}}</div>
+                    <div class="asset-name">Gifts</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <div class="footer-item">
+                <div class="f-label">Liquid Balance</div>
+                <div class="f-value">{{BALANCE}} TON</div>
+            </div>
+            <div class="footer-item" style="align-items: center;">
+                <div class="f-label">Last Activity</div>
+                <div class="f-value">{{LAST_ACTIVITY}}</div>
+            </div>
+            <div class="footer-item" style="align-items: flex-end;">
+                <div class="status-tag">{{STATUS}}</div>
+            </div>
+        </div>
+    </div>
+    <div class="branding">Powered by iFragment</div>
+</body>
+</html>

@@ -17,6 +17,7 @@ import * as marketappService from '../../Market/Application/marketapp.service.js
 import * as marketService from '../../Market/Application/market.service.js';
 import * as cardGenerator from '../../../Shared/UI/Components/card-generator.component.js';
 import { performance } from 'perf_hooks';
+import giftAssetAPI from '../../Market/Infrastructure/gift_asset.api.js';
 
 // ==================== KEYBOARD GENERATORS ====================
 
@@ -45,15 +46,20 @@ export function getMainPanelKeyboard() {
             Markup.button.callback('🚫 Block User', 'admin_block'),
             Markup.button.callback('✅ Unblock', 'admin_unblock')
         ],
-        // Row 6: Premium
+        // Row 6: FRG Credits
         [
-            Markup.button.callback('🌟 Add Premium', 'admin_premium')
+            Markup.button.callback('🪙 Add FRG Credits', 'admin_add_frg'),
+            Markup.button.callback('📉 Remove FRG', 'admin_remove_frg')
         ],
         // Row 7: Sponsor
         [
             Markup.button.callback('✏️ Edit Sponsor', 'admin_edit_sponsor')
         ],
-        // Row 8: My Accounts
+        // Row 8: API Keys
+        [
+            Markup.button.callback('🔑 API Keys', 'admin_api_keys')
+        ],
+        // Row 9: My Accounts
         [
             Markup.button.callback('🗂 My Accounts', 'panel_my_accounts')
         ]
@@ -874,9 +880,9 @@ export function registerPanelHandlers(bot, isAdmin) {
 
 
 
-    // Force register admin_premium handler here to ensure availability
-    bot.action('admin_premium', async (ctx) => {
-        console.log('🔘 Add Premium button clicked by:', ctx.from.id);
+    // Force register admin_add_frg handler here to ensure availability
+    bot.action('admin_add_frg', async (ctx) => {
+        console.log('🔘 Add FRG button clicked by:', ctx.from.id);
         try {
             if (!isAdmin(ctx.from.id)) {
                 console.warn('⛔ Admin check failed for:', ctx.from.id);
@@ -898,27 +904,171 @@ export function registerPanelHandlers(bot, isAdmin) {
             console.log('✅ Setting state for chat:', chatId);
 
             userStates.set(chatId, {
-                action: 'admin_premium',
+                action: 'admin_add_frg',
                 timestamp: Date.now()
             });
 
             await ctx.replyWithMarkdown(`
-🌟 *Add Premium*
+🪙 *Add FRG Credits*
     
-Send the user ID and number of days.
+Send the user ID and amount of credits to gift.
     
-_Format: User ID days_
-_Example: 123456789 30_
+_Format: User ID amount_
+_Example: 123456789 20_
     
 Type /cancel to cancel.
 `).catch(e => console.error('Reply error:', e));
 
-            console.log('✅ Premium prompt sent successfully');
+            console.log('✅ FRG prompt sent successfully');
 
         } catch (error) {
-            console.error('❌ Admin Premium Error:', error);
-            await ctx.reply(`❌ Error in premium handler: ${error.message}`).catch(() => { });
+            console.error('❌ Admin FRG Error:', error);
+            await ctx.reply(`❌ Error in FRG handler: ${error.message}`).catch(() => { });
         }
+    });
+
+    // Force register admin_remove_frg handler
+    bot.action('admin_remove_frg', async (ctx) => {
+        try {
+            if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery('❌ Access denied');
+            await ctx.answerCbQuery();
+
+            const chatId = ctx.chat.id;
+            userStates.set(chatId, {
+                action: 'admin_remove_frg',
+                timestamp: Date.now()
+            });
+
+            await ctx.replyWithMarkdown(`
+📉 *Remove FRG Credits*
+    
+Send the user ID and amount of credits to remove.
+    
+_Format: User ID amount_
+_Example: 123456789 20_
+    
+Type /cancel to cancel.
+`);
+        } catch (error) {
+            console.error('❌ Admin Remove FRG Error:', error);
+            await ctx.reply(`❌ Error: ${error.message}`).catch(() => { });
+        }
+    });
+
+    // ==================== GIFT-ASSET API TOKEN MANAGEMENT ====================
+
+    bot.action('admin_api_keys', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery('❌ Access denied');
+        await ctx.answerCbQuery();
+
+        const tokens = giftAssetAPI.getTokenList();
+        let msg = `🔑 *API Key Management*\n`;
+        msg += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
+        msg += `📊 *Gift-Asset API*\n`;
+        msg += `├ Active Tokens: *${giftAssetAPI.getTokenCount()}*\n`;
+        msg += `└ Rotation: *Automatic*\n\n`;
+
+        if (tokens.length > 0) {
+            msg += `📋 *Token List:*\n`;
+            tokens.forEach((t, i) => {
+                const statusIcon = t.cooldown ? '🔴' : '🟢';
+                msg += `  ${statusIcon} #${i + 1} \`${t.preview}\`\n`;
+            });
+        } else {
+            msg += `⚠️ _No tokens configured. Add one below._\n`;
+        }
+
+        await ctx.editMessageText(msg, {
+            parse_mode: 'Markdown',
+            reply_markup: {
+                inline_keyboard: [
+                    [Markup.button.callback('➕ Add Token', 'admin_add_ga_token')],
+                    [Markup.button.callback('➖ Remove Token', 'admin_remove_ga_token')],
+                    [Markup.button.callback('🔄 Refresh', 'admin_api_keys')],
+                    [Markup.button.callback('🔙 Back to Panel', 'panel_main')]
+                ]
+            }
+        });
+    });
+
+    bot.action('admin_add_ga_token', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery('❌ Access denied');
+        await ctx.answerCbQuery();
+
+        userStates.set(ctx.chat.id, {
+            action: 'admin_add_ga_token',
+            timestamp: Date.now()
+        });
+
+        await ctx.editMessageText(
+            `🔑 *Add Gift-Asset API Token*\n\n` +
+            `Paste the API token from [giftasset.dev](https://giftasset.dev):\n\n` +
+            ` _(Stored securely in MongoDB and rotated automatically)_`, {
+            parse_mode: 'Markdown',
+            disable_web_page_preview: true,
+            reply_markup: {
+                inline_keyboard: [
+                    [Markup.button.callback('❌ Cancel', 'admin_api_keys')]
+                ]
+            }
+        });
+    });
+
+    bot.action('admin_remove_ga_token', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery('❌ Access denied');
+        await ctx.answerCbQuery();
+
+        const tokens = giftAssetAPI.getTokenList();
+        if (tokens.length === 0) {
+            return ctx.editMessageText(
+                `⚠️ No tokens to remove.`, {
+                reply_markup: {
+                    inline_keyboard: [[Markup.button.callback('🔙 Back', 'admin_api_keys')]]
+                }
+            });
+        }
+
+        const buttons = tokens.map((t, i) => [
+            Markup.button.callback(`🗑 #${i + 1} ${t.preview}`, `admin_del_ga_${i}`)
+        ]);
+        buttons.push([Markup.button.callback('❌ Cancel', 'admin_api_keys')]);
+
+        await ctx.editMessageText(
+            `🗑 *Remove Token*\n\nSelect the token to remove:`, {
+            parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: buttons }
+        });
+    });
+
+    bot.action(/^admin_del_ga_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery('❌ Access denied');
+        const idx = parseInt(ctx.match[1]);
+        const removed = await giftAssetAPI.removeToken(idx);
+        if (removed) {
+            await ctx.answerCbQuery('✅ Token removed');
+        } else {
+            await ctx.answerCbQuery('❌ Invalid token index');
+        }
+        // Refresh the API keys page
+        const tokens = giftAssetAPI.getTokenList();
+        let msg = `🔑 *API Key Management*\n`;
+        msg += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
+        msg += `✅ Token removed. *${giftAssetAPI.getTokenCount()}* tokens remaining.\n\n`;
+        if (tokens.length > 0) {
+            tokens.forEach((t, i) => {
+                const statusIcon = t.cooldown ? '🔴' : '🟢';
+                msg += `  ${statusIcon} #${i + 1} \`${t.preview}\`\n`;
+            });
+        }
+        await ctx.editMessageText(msg, {
+            parse_mode: 'Markdown',
+            reply_markup: {
+                inline_keyboard: [
+                    [Markup.button.callback('➕ Add Token', 'admin_add_ga_token')],
+                    [Markup.button.callback('🔙 Back to Panel', 'panel_main')]
+                ]
+            }
+        });
     });
 
 }

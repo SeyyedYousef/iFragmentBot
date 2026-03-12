@@ -1,4 +1,4 @@
-﻿import 'dotenv/config';
+import 'dotenv/config';
 import { Telegraf, Markup } from 'telegraf';
 import http from 'http';
 import fetch from 'node-fetch';
@@ -33,7 +33,7 @@ import { getPoolStats } from '../Modules/Market/Infrastructure/fragment.reposito
 import { globalLimiter, withUserLimit, isOverloaded, getEstimatedWaitTime, getLimiterStats } from '../Shared/Infra/Network/rate-limiter.service.js';
 import * as accountManager from '../Modules/User/Application/account-manager.service.js';
 import { generateGiftReport, parseGiftLink, formatNumber } from '../Modules/Market/Application/marketapp.service.js';
-import salesMonitor from '../Modules/Monitoring/Application/sales-monitor.service.js'; // V5: Uses TonCenter API (FREE!)
+// import salesMonitor from '../Modules/Monitoring/Application/sales-monitor.service.js'; // REMOVED
 import * as dailyScheduler from '../Modules/Automation/Application/daily-scheduler.service.js';
 import { generateWalletReport, handleUsernamePagination, handleNumberPagination, handleGiftPagination } from '../Modules/Monitoring/Application/wallet-tracker.service.js';
 import { getOwnerWalletByUsername } from '../Modules/Market/Application/portfolio.service.js';
@@ -57,9 +57,7 @@ import { generateComparisonCard } from '../Shared/UI/Components/comparison-card.
 import {
     canUseFeature,
     useFeature,
-    isPremium,
     isBlocked,
-    activatePremium,
     blockUser,
     unblockUser,
     getStats,
@@ -67,8 +65,7 @@ import {
     formatCreditsMessage,
     formatNoCreditsMessage,
     initUserService,
-    getPremiumExpiry,
-    getPremiumTier,
+    addFrgCredits,
     getRemainingLimits,
     getTimeUntilReset,
     getTopGiftHolders,
@@ -76,20 +73,8 @@ import {
     getSponsorText,
     setSponsorText,
     loadSponsorText,
-    processReferral,
-    confirmReferral,
-    getReferralStats,
-    getTopReferrers,
-    processSpin,
-    claimDailyReward,
-    getStreakInfo,
     updateUserPortfolioValue,
     getUserAsync,
-    PREMIUM_PRICE,
-    PREMIUM_DAYS,
-    PREMIUM_TIERS,
-    REFERRAL_MILESTONES,
-    STREAK_REWARDS,
     scanUserGiftsIfNeeded
 } from '../Modules/User/Application/user.service.js';
 
@@ -105,11 +90,19 @@ if (!BOT_TOKEN) {
 
 // Global Error Handlers to prevent crashes
 process.on('uncaughtException', (err) => {
-    console.error('âŒ Uncaught Exception:', err);
+    console.error('💥 [Critical] Uncaught Exception:', err.stack || err);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('âŒ Unhandled Rejection:', reason);
+    console.error('💥 [Critical] Unhandled Rejection at:', promise, 'reason:', reason.stack || reason);
+});
+
+process.on('exit', (code) => {
+    console.log(`ℹ️ [Process] Exiting with code: ${code}`);
+});
+
+process.on('beforeExit', (code) => {
+    console.log(`ℹ️ [Process] Before Exit event fired with code: ${code}`);
 });
 
 // SIGINT/SIGTERM handlers with browser cleanup are registered at the bottom of this file
@@ -158,6 +151,28 @@ function isAdmin(userId) {
 bot.use(async (ctx, next) => {
     if (ctx.from && ctx.from.is_bot) {
         return; // Silent ignore, no processing
+    }
+    return next();
+});
+
+// 🛡️ Global Group Monitor (FRG Economy)
+bot.use(async (ctx, next) => {
+    // Reward users for participating in the FragmentInvestors group
+    if (ctx.chat && (ctx.chat.username === 'FragmentInvestors' || String(ctx.chat.id) === '-1002220790800')) {
+        if (ctx.from && !ctx.from.is_bot) {
+            // Check if it's a Paid Message (Stars)
+            const isPaid = !!(ctx.message && ctx.message.paid_media);
+
+            // Reward 300 FRG for any message, but we can log if it was paid
+            addFrgCredits(ctx.from.id, 300, isPaid ? "Paid Group Message" : "Group Message");
+
+            // Notify user in DM (optional but requested)
+            try {
+                await bot.telegram.sendMessage(ctx.from.id, `🪙 *Reward Received!*\n\nYou earned **+300 FRG** for participating in the Investors Club group.\n\n💰 Use it for your next 3 reports!`, { parse_mode: 'Markdown' });
+            } catch (e) {
+                // Ignore if user hasn't started the bot or blocked it
+            }
+        }
     }
     return next();
 });
@@ -373,11 +388,11 @@ function startBackgroundUpdates() {
     update888Data();
 
     // Schedule intervals
-    // TON Price: Every 4 hours (optimized for low-resource servers)
-    setInterval(updateMarketData, 4 * 60 * 60 * 1000);
+    // TON Price: Every 10 minutes (Updated for real-time accuracy)
+    setInterval(updateMarketData, 10 * 60 * 1000);
 
-    // +888 Floor: Every 4 hours (optimized for Render free tier)
-    setInterval(update888Data, 4 * 60 * 60 * 1000);
+    // +888 Floor: Every 10 minutes (Updated for real-time accuracy)
+    setInterval(update888Data, 10 * 60 * 1000);
 }
 
 // Optimized: Returns data from cache INSTANTLY - no fetch delays!
@@ -428,14 +443,14 @@ async function initAndLaunch() {
     await loadPersistentCache();
 
     // Force initial TON price fetch (FAST) - awaited to ensure accuracy on boot
-    try {
-        const stats = await getTonMarketStats();
+    // Force initial TON price fetch (FAST) - non-blocking to ensure fast boot
+    getTonMarketStats().then(stats => {
         if (stats && stats.price > 0) {
             tonPriceCache.set('marketStats', { ...stats, timestamp: Date.now() });
             tonPriceCache.set('price', stats.price);
             console.log(`✅ Initial TON Price: $${stats.price}`);
         }
-    } catch (e) { console.error('Initial TON fetch failed'); }
+    }).catch(e => console.error('Initial TON fetch failed'));
 
     // Start background tasks (including slow 888 fetch)
     startBackgroundUpdates();
@@ -705,103 +720,66 @@ async function initAndLaunch() {
         await handleViewNumbers(ctx, ctx.match[1]);
     });
 
-    // ==================== SALES MONITOR v2.0 ====================
-    // import moved to top
-    salesMonitor.setBot(bot);
-    salesMonitor.startMonitor(); // Auto-start on bot launch
-
     // ==================== DAILY SCHEDULER (Market Pulse at 9 AM Afghanistan) ====================
     dailyScheduler.setBot(bot);
     dailyScheduler.startScheduler();
 
     for (let attempt = 1; attempt <= 5; attempt++) {
         try {
-            await bot.launch();
-            console.log('✅ Bot is running!\n📝 Send /start to begin');
-            return;
-        } catch (err) {
-            console.error(`❌ Launch Error (Attempt ${attempt}/5):`, err.message);
+            console.log(`🤖 [Bot] Fetching identity (Attempt ${attempt}/5)...`);
+            const botInfo = await bot.telegram.getMe();
+            bot.botInfo = botInfo;
+            console.log(`✅ [Bot] Identity verified: @${botInfo.username}`);
 
-            if (attempt < 5) {
-                // Determine wait time: 3s for conflict (409), 5s for others (network/timeout)
-                const waitTime = (err.response?.error_code === 409) ? 3000 : 5000;
-                console.log(`⏳ Retrying in ${waitTime / 1000}s...`);
-                await new Promise(r => setTimeout(r, waitTime));
-            } else {
-                console.error('❌ Final Failure. Could not log in to Telegram.');
+            console.log('🚀 [Bot] Clearing webhooks...');
+            await bot.telegram.deleteWebhook();
+            
+            console.log('🚀 [Bot] Starting polling loop...');
+            bot.launch({
+                polling: {
+                    allowedUpdates: ['message', 'callback_query', 'inline_query'],
+                    dropPendingUpdates: true
+                }
+            }).then(() => {
+                console.log('✅ [Bot] Polling active and listening!');
+            }).catch(err => {
+                console.error('❌ [Bot] Launch Async Error:', err.message);
+            });
+            
+            console.log('✅ [Bot] Startup sequence completed!');
+            console.log(`📝 Send any message to @${botInfo.username} to test.`);
+            break; // Success
+        } catch (err) {
+            console.error(`❌ [Bot] Launch Error (Attempt ${attempt}/5):`, err.message);
+            if (attempt === 5) {
+                console.error('❌ [Bot] Final Failure. Check your token or network connection.');
                 process.exit(1);
             }
+            const waitTime = (err.response?.error_code === 409) ? 3000 : 5000;
+            console.log(`⏳ [Bot] Retrying in ${waitTime / 1000}s...`);
+            await new Promise(r => setTimeout(r, waitTime));
         }
     }
 }
 
 
-// ==================== BOT.START (Welcome + Anti-Fake Referral) ====================
+// ==================== GLOBAL MIDDLEWARE (Logging) ====================
+bot.use(async (ctx, next) => {
+    console.log(`📡 [Update] Type: ${ctx.updateType} | From: ${ctx.from?.id || 'Unknown'}`);
+    return next();
+});
+
+// ==================== BOT.START (Welcome) ====================
 bot.start(async (ctx) => {
-    // Handle Referral Payload — stores as PENDING (not confirmed until channel join)
-    if (ctx.payload && ctx.payload.startsWith('ref_')) {
-        const referrerId = ctx.payload.replace('ref_', '');
-        if (referrerId && /^\d+$/.test(referrerId)) {
-            processReferral(ctx.from.id, parseInt(referrerId)).then(result => {
-                if (result.success && result.pending) {
-                    // Notify referrer that it's pending
-                    bot.telegram.sendMessage(result.referrerId, `
-👤 *New Referral (Pending)*
-
-Someone joined via your link!
-⏳ _They must join ${CONFIG.REQUIRED_CHANNEL} to confirm._
-
-📊 Pending: *${result.pendingCount}* | Confirmed: *${result.confirmedCount}*
-`, { parse_mode: 'Markdown' }).catch(() => { });
-                }
-            }).catch(err => console.error('Referral error:', err));
-        }
-    }
-
     return sendDashboard(ctx, false);
 });
 
-// ==================== CHECK MEMBERSHIP (+ Referral Confirmation) ====================
+// ==================== CHECK MEMBERSHIP ====================
 bot.action('check_membership', async (ctx) => {
     const isMember = await isChannelMember(ctx.from.id);
 
     if (isMember) {
         await ctx.answerCbQuery('✅ Welcome!');
-
-        // 🔥 ANTI-FAKE: Confirm pending referral now that user joined channel
-        try {
-            const confirmResult = await confirmReferral(ctx.from.id, bot);
-            if (confirmResult.confirmed) {
-                console.log(`✅ Referral confirmed: User ${ctx.from.id} → Referrer ${confirmResult.referrerId} (Total: ${confirmResult.totalCount})`);
-
-                // Notify referrer
-                let notifyMsg = `
-✅ *Referral Confirmed!*
-
-Your friend joined the channel! 🎉
-📊 Total Confirmed Invites: *${confirmResult.totalCount}*`;
-
-                if (confirmResult.milestoneReward) {
-                    notifyMsg += `
-
-🏆 *MILESTONE REACHED: ${confirmResult.milestoneReward.count} invites!*
-🎁 Reward: *${confirmResult.milestoneReward.reward.label}*
-
-Keep inviting for bigger rewards! 🚀`;
-                } else {
-                    // Show next milestone
-                    const stats = await getReferralStats(confirmResult.referrerId);
-                    notifyMsg += `
-
-📈 Next milestone: *${stats.target}* invites → ${stats.nextReward}`;
-                }
-
-                bot.telegram.sendMessage(confirmResult.referrerId, notifyMsg, { parse_mode: 'Markdown' }).catch(() => { });
-            }
-        } catch (e) {
-            console.error('Referral confirm error:', e.message);
-        }
-
         await sendDashboard(ctx, true);
     } else {
         await ctx.answerCbQuery(`❌ You are not a member yet! Please join ${CONFIG.REQUIRED_CHANNEL} first.`, { show_alert: true });
@@ -1017,6 +995,9 @@ bot.on('text', async (ctx, next) => {
         const userId = ctx.from.id;
         const input = ctx.message.text ? ctx.message.text.trim() : '';
         if (!input) return;
+
+        console.log(`📩 [Text] From ${userId} in ${ctx.chat.type}: ${input}`);
+
         if (input.startsWith('/')) return next(); // Pass commands to other handlers
 
         const chatId = ctx.chat.id;
@@ -1141,6 +1122,7 @@ bot.on('text', async (ctx, next) => {
         if (isPrivate && !state) {
             // A. Wallet / Portfolio
             if (input.length > 40 && (input.startsWith('EQ') || input.startsWith('UQ'))) {
+                console.log(`🔍 [SmartSearch] Matched Wallet: ${input}`);
                 await handleGroupCommand(ctx, `!wallet ${input}`, handleComparison, getTelegramClient);
                 return;
             }
@@ -1148,6 +1130,7 @@ bot.on('text', async (ctx, next) => {
             // B. Gift Link
             const giftParsed = parseGiftLink(input);
             if (giftParsed.isValid) {
+                console.log(`🔍 [SmartSearch] Matched Gift Link: ${input}`);
                 await handleGroupCommand(ctx, `!gift ${input}`, handleComparison, getTelegramClient);
                 return;
             }
@@ -1155,6 +1138,7 @@ bot.on('text', async (ctx, next) => {
             // C. Username
             const cleanUser = input.replace('@', '');
             if (/^[a-zA-Z0-9_]{4,32}$/.test(cleanUser)) {
+                console.log(`🔍 [SmartSearch] Matched Username: ${cleanUser}`);
                 await handleGroupCommand(ctx, `!u ${cleanUser}`, handleComparison, getTelegramClient);
                 return;
             }
@@ -1172,6 +1156,8 @@ bot.on('text', async (ctx, next) => {
 // ==================== GRACEFUL SHUTDOWN ====================
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
+bot.catch((err, ctx) => {
+    console.error(`❌ Telegraf Error for ${ctx.updateType}:`, err);
+});
 
 initAndLaunch();
-

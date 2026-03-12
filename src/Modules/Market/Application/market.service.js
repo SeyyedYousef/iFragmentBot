@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import fetch from 'node-fetch'; // Standard fetch
 import * as seetgService from '../../Automation/Application/seetg.service.js';
 import * as marketappService from './marketapp.service.js';
+import { tonPriceCache } from '../../../Shared/Infra/Cache/cache.service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -243,9 +244,15 @@ export async function get888Stats() {
         }
     }
 
-    // Priority 3: Hardcoded Market Fallback (Last Resort)
-    console.log('⚠️ Using Fallback +888 Price: 1800 TON');
-    return 1800;
+    // Priority 3: Dynamic Search/Cache Fallback (Last Resort)
+    const cached = tonPriceCache.get('floor888');
+    if (cached && cached.price) {
+        console.log(`⚠️ Using Cached +888 Price: ${cached.price} TON`);
+        return cached.price;
+    }
+
+    console.log('⚠️ Using Hardcoded Safety +888 Price: 850 TON');
+    return 850;
 }
 
 // TON Price

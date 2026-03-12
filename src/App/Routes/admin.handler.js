@@ -11,16 +11,15 @@ import { getLimiterStats } from '../../Shared/Infra/Network/rate-limiter.service
 import { getAllCacheStats } from '../../Shared/Infra/Cache/cache.service.js';
 import { getGiftStats, get888Stats } from '../../Modules/Market/Application/market.service.js';
 import { generateNewsCard, generateNewsCard2, generateMarketCard } from '../../Shared/UI/Components/card-generator.component.js';
+import giftAssetAPI from '../../Modules/Market/Infrastructure/gift_asset.api.js';
 import {
     getStats,
     getAllUsers,
     blockUser,
     unblockUser,
-    activatePremium,
-    getSponsorText,
     setSponsorText,
     formatCreditsMessage,
-    PREMIUM_DAYS
+    addFrgCredits
 } from '../../Modules/User/Application/user.service.js';
 
 // ==================== REGISTER HANDLERS ====================
@@ -50,12 +49,8 @@ export function registerAdminHandlers(bot, isAdmin) {
 
 👥 *Users:*
 • Total: ${stats.totalUsers}
-• Premium: ${stats.premiumUsers} 🌟
-• Free: ${stats.freeUsers}
+• Active: ${stats.totalUsers - stats.blockedUsers}
 • Blocked: ${stats.blockedUsers} 🚫
-
-🌟 *Recent Premium Users:*
-${premiumList}
 
 ⏰ _Updated: ${new Date().toLocaleString()}_
 `);
@@ -324,43 +319,84 @@ export async function handleAdminTextMessage(ctx, state, bot, isAdmin) {
         return true;
     }
 
-    // Handle admin premium
-    if (state.action === 'admin_premium' && isAdmin(ctx.from.id)) {
+    // Handle admin add credits
+    if (state.action === 'admin_add_frg' && isAdmin(ctx.from.id)) {
         const parts = input.split(/\s+/);
         if (parts.length !== 2) {
-            await ctx.reply('❌ Invalid format. Use: user_id days\nExample: 123456789 30');
+            await ctx.reply('❌ Invalid format. Use: user_id amount\nExample: 123456789 10');
             return true;
         }
 
-        const [targetId, daysStr] = parts;
-        const days = parseInt(daysStr);
+        const [targetId, amountStr] = parts;
+        const amount = parseInt(amountStr);
 
-        if (!/^\d+$/.test(targetId) || isNaN(days) || days < 1) {
-            await ctx.reply('❌ Invalid format. User ID must be numeric and days must be positive.');
+        if (!/^\d+$/.test(targetId) || isNaN(amount) || amount < 1) {
+            await ctx.reply('❌ Invalid format. User ID must be numeric and amount must be positive.');
             return true;
         }
 
         userStates.delete(chatId);
 
-        const result = activatePremium(targetId, days);
-        const expiryDate = result.expiresAt.toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-        });
+        const newBalance = addFrgCredits(targetId, amount, "Admin Gift");
 
-        await ctx.reply(`🌟 Premium activated!\n\n• User: ${targetId}\n• Days: ${days}\n• Expires: ${expiryDate}`);
+        await ctx.reply(`🪙 *Credits Added!*
+        
+👤 *User:* \`${targetId}\`
+💰 *Amount:* \`${amount} FRG\`
+📈 *New Balance:* \`${newBalance} FRG\``, { parse_mode: 'Markdown' });
 
         // Notify the user
         try {
             await bot.telegram.sendMessage(targetId, `
-🎉 *Congratulations!*
+🎁 *You received FRG Credits!*
 
-You have received *${days} days* of Premium access!
+The admin has gifted you **${amount} FRG Credits**.
 
-📅 Expires: ${expiryDate}
+💰 New Balance: **${newBalance} FRG**
+🚀 Use it now for detailed reports!
+`, { parse_mode: 'Markdown' });
+        } catch (e) {
+            // User may have blocked the bot
+        }
+        return true;
+    }
 
-Enjoy unlimited access to all features! 🌟
+    // Handle admin remove credits
+    if (state.action === 'admin_remove_frg' && isAdmin(ctx.from.id)) {
+        const parts = input.split(/\s+/);
+        if (parts.length !== 2) {
+            await ctx.reply('❌ Invalid format. Use: user_id amount\nExample: 123456789 20');
+            return true;
+        }
+
+        const [targetId, amountStr] = parts;
+        const amount = parseInt(amountStr);
+
+        if (!/^\d+$/.test(targetId) || isNaN(amount) || amount < 1) {
+            await ctx.reply('❌ Invalid format. User ID must be numeric and amount must be positive.');
+            return true;
+        }
+
+        userStates.delete(chatId);
+
+        // We use addFrgCredits with negative amount 
+        const { addFrgCredits } = await import('../../Modules/User/Application/user.service.js');
+        const newBalance = await addFrgCredits(targetId, -amount, "Admin Removal");
+
+        await ctx.reply(`📉 *Credits Removed!*
+        
+👤 *User:* \`${targetId}\`
+📉 *Removed:* \`${amount} FRG\`
+💰 *New Balance:* \`${newBalance} FRG\``, { parse_mode: 'Markdown' });
+
+        // Notify the user
+        try {
+            await bot.telegram.sendMessage(targetId, `
+📉 *FRG Credits Deducted*
+
+The admin has removed **${amount} FRG Credits** from your balance.
+
+💰 New Balance: **${newBalance} FRG**
 `, { parse_mode: 'Markdown' });
         } catch (e) {
             // User may have blocked the bot
@@ -466,6 +502,33 @@ ${input}
                 ]
             }
         });
+        return true;
+    }
+
+    // Handle Gift-Asset API token addition
+    if (state.action === 'admin_add_ga_token' && isAdmin(ctx.from.id)) {
+        userStates.delete(chatId);
+
+        const token = input.trim();
+        const added = await giftAssetAPI.addToken(token);
+
+        if (added) {
+            await ctx.replyWithMarkdown(`✅ *Token Added!*\n\n🔑 \`${token.substring(0, 8)}...${token.slice(-4)}\`\n📊 Total: *${giftAssetAPI.getTokenCount()}* tokens\n\n_Token rotation is automatic._`, {
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '🔙 API Keys', callback_data: 'admin_api_keys' }]
+                    ]
+                }
+            });
+        } else {
+            await ctx.replyWithMarkdown(`❌ *Failed to add token.*\n\nEither the token is too short or it already exists.`, {
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '🔙 API Keys', callback_data: 'admin_api_keys' }]
+                    ]
+                }
+            });
+        }
         return true;
     }
 

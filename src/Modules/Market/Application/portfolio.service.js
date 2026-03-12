@@ -111,6 +111,17 @@ const OFFICIAL_GIFT_NAMES = new Set([
 
 // TonAPI base URL
 const TONAPI_BASE_URL = 'https://tonapi.io/v2';
+// Toncenter API as fallback
+const TONCENTER_BASE_URL = 'https://toncenter.com/api/v3';
+
+/**
+ * Check if TONAPI_KEY is a real key (not placeholder)
+ */
+function getValidTonApiKey() {
+    const key = process.env.TONAPI_KEY;
+    if (!key || key === 'YOUR_TONAPI_KEY_HERE' || key.startsWith('YOUR_')) return null;
+    return key;
+}
 
 /**
  * Fetch all NFTs for a wallet address from TonAPI with pagination
@@ -163,8 +174,9 @@ async function fetchNFTsFromTonAPI(walletAddress, maxNFTs = 10000) {
         'Accept': 'application/json',
         'User-Agent': 'iFragmentBot/1.0'
     };
-    if (process.env.TONAPI_KEY) {
-        headers['Authorization'] = `Bearer ${process.env.TONAPI_KEY}`;
+    const apiKey = getValidTonApiKey();
+    if (apiKey) {
+        headers['Authorization'] = `Bearer ${apiKey}`;
     }
 
     try {
@@ -440,25 +452,58 @@ async function getOwnerByNFTSearch(username) {
     }
 }
 
-/**
- * Get portfolio (all Fragment assets) for a wallet address
- * Ultra-fast version using TonAPI.io
- * @param {string} walletAddress - TON wallet address
- * @returns {Promise<Object>} Portfolio data
- */
 export async function getPortfolio(walletAddress) {
     console.log(`📂 Fetching portfolio for wallet: ${walletAddress?.substring(0, 10)}...`);
     const overallStart = Date.now();
 
     try {
-        // Fetch all NFTs in one API call (< 1 second)
+        // Build headers
+        const headers = {
+            'Accept': 'application/json',
+            'User-Agent': 'iFragmentBot/1.0'
+        };
+        const apiKey = getValidTonApiKey();
+        if (apiKey) {
+            headers['Authorization'] = `Bearer ${apiKey}`;
+        }
+
+        // 1. Fetch Account Info — try TonAPI first, fallback to Toncenter
+        let accountData = {};
+        try {
+            const accountUrl = `${TONAPI_BASE_URL}/accounts/${walletAddress}`;
+            const accountResp = await fetchWithRetry(accountUrl, { headers });
+            if (accountResp.ok) {
+                accountData = await accountResp.json();
+            } else {
+                console.warn(`⚠️ TonAPI account fetch failed (${accountResp.status}), trying Toncenter...`);
+                const tcResp = await fetchWithRetry(`${TONCENTER_BASE_URL}/account?address=${encodeURIComponent(walletAddress)}`);
+                if (tcResp.ok) {
+                    const tcData = await tcResp.json();
+                    accountData = {
+                        balance: parseInt(tcData.balance || '0'),
+                        status: tcData.status || 'active',
+                        is_wallet: true,
+                        last_activity: tcData.last_transaction_lt ? Math.floor(Date.now() / 1000) : 0
+                    };
+                }
+            }
+        } catch (accErr) {
+            console.warn('⚠️ Account fetch failed on both providers:', accErr.message);
+        }
+
+        // 2. Fetch all NFTs in one API call (< 1 second)
         const nfts = await fetchNFTsFromTonAPI(walletAddress);
 
         const portfolio = {
             wallet: walletAddress,
+            balance: (accountData.balance || 0) / 1e9,
+            status: accountData.status || 'active',
+            isWallet: accountData.is_wallet || false,
+            interfaces: accountData.interfaces || [],
+            lastActivity: accountData.last_activity || 0,
             usernames: [],
             anonymousNumbers: [],
-            gifts: [], // NEW: NFT Gifts
+            gifts: [],
             totalUsernames: 0,
             totalNumbers: 0,
             totalGifts: 0

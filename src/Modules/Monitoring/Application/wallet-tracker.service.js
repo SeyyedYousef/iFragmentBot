@@ -2,6 +2,11 @@
 import { Markup } from 'telegraf';
 import { getPortfolio } from '../../Market/Application/portfolio.service.js';
 import * as telegramClient from '../../../Shared/Infra/Telegram/telegram.client.js';
+import { generateWalletCard } from '../../../Shared/UI/Components/card-generator.component.js';
+import { tonPriceCache } from '../../../Shared/Infra/Cache/cache.service.js';
+
+// Store pagination data temporarily (wallet -> data)
+const paginationCache = new Map();
 
 // Utility format number
 const formatNum = (num) => {
@@ -9,248 +14,349 @@ const formatNum = (num) => {
 };
 
 // Pagination settings
-const ITEMS_PER_PAGE = 40;
-
-// Store pagination data temporarily (wallet -> data)
-const paginationCache = new Map();
+const ITEMS_PER_PAGE = 25; // Adjusted for reliability within 1024-char photo captions
 
 /**
- * Generate and send the 4-part Wallet Report with pagination
+ * Smartly edit a message (handles both photo captions and text messages)
+ */
+async function smartEdit(ctx, text, reply_markup) {
+    try {
+        // Try editing as a text message first
+        await ctx.editMessageText(text, {
+            parse_mode: 'Markdown',
+            reply_markup
+        });
+    } catch (error) {
+        // If it was a photo message, edit the caption instead
+        if (error.message.includes('message is not modifiable') || error.message.includes('there is no text in the message')) {
+            try {
+                await ctx.editMessageCaption(text, {
+                    parse_mode: 'Markdown',
+                    reply_markup
+                });
+            } catch (innerError) {
+                // If caption is too long or other error, fallback to resending (rare)
+                console.error('SmartEdit Failed:', innerError.message);
+                await ctx.reply(text, { parse_mode: 'Markdown', reply_markup });
+            }
+        } else {
+            console.error('SmartEdit Error:', error.message);
+        }
+    }
+}
+
+
+
+/**
+ * Generate and send the Professional Wallet Report
  */
 export async function generateWalletReport(ctx, walletAddress) {
-    const loadingMsg = await ctx.reply('🔍 Scanning wallet...');
+    const loadingMsg = await ctx.reply('🔍 *Scanning wallet...*\n_Fetching balance & assets via TonAPI..._', { parse_mode: 'Markdown' });
 
     try {
-        let portfolio = await getPortfolio(walletAddress);
-
-        if (!portfolio || portfolio.error) {
+        let portfolio;
+        try {
+            portfolio = await getPortfolio(walletAddress);
+        } catch (fetchErr) {
+            console.error('❌ Portfolio fetch crashed:', fetchErr.message);
             await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id).catch(() => { });
-            await ctx.reply('❌ Failed to fetch portfolio. Please try again.');
+            await ctx.reply(`❌ *Could not connect to TonAPI.*\n\nPlease try again in a few seconds.\n_Error: ${fetchErr.message}_`, {
+                parse_mode: 'Markdown',
+                reply_markup: {
+                    inline_keyboard: [[{ text: '🔙 Main Menu', callback_data: 'back_to_menu' }]]
+                }
+            });
             return;
         }
 
-        await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id).catch(() => { });
+        // Handle error response from getPortfolio
+        if (portfolio?.error) {
+            console.warn('⚠️ Portfolio returned error:', portfolio.error);
+            await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id).catch(() => { });
+            await ctx.reply(`⚠️ *Could not read this wallet.*\n\nPossible reasons:\n• Invalid wallet address\n• Wallet has never been activated\n• TonAPI is temporarily unavailable\n\n_Tip: Make sure the address starts with UQ or EQ._`, {
+                parse_mode: 'Markdown',
+                reply_markup: {
+                    inline_keyboard: [[{ text: '🔙 Main Menu', callback_data: 'back_to_menu' }]]
+                }
+            });
+            return;
+        }
 
-        const totalGifts = portfolio.totalGifts || 0;
-        const gifts = portfolio.gifts || [];
+        const uCount = portfolio?.usernames?.length || 0;
+        const nCount = portfolio?.anonymousNumbers?.length || 0;
+        const gCount = portfolio?.totalGifts || 0;
+        const totalAssets = uCount + nCount + gCount;
 
-        // Store portfolio for pagination
+        // ===== WHALE RANK =====
+        const totalValue = portfolio?.estimatedValue || 0;
+        const balance = portfolio?.balance || 0;
+        const netWorth = balance + totalValue;
+
+        let rank = '🦐 Shrimp';
+        if (netWorth > 100000) rank = '🐋 MEGA WHALE';
+        else if (netWorth > 50000) rank = '🐋 Whale';
+        else if (netWorth > 10000) rank = '🦈 Shark';
+        else if (netWorth > 1000) rank = '🐬 Dolphin';
+        else if (netWorth > 100) rank = '🦀 Crab';
+        else if (netWorth > 10) rank = '🐟 Fish';
+
+        // ===== FORMAT DATES =====
+        const lastSeen = portfolio?.lastActivity
+            ? new Date(portfolio.lastActivity * 1000).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+            : 'Unknown';
+
+        // ===== PRICE CALCULATIONS =====
+        const tonPrice = tonPriceCache.get('price') || 1.5;
+        const netWorthUsd = netWorth * tonPrice;
+        const liquidUsd = balance * tonPrice;
+
+        // ===== COMPOSITION BAR =====
+        const total = totalAssets || 1;
+        const uBars = Math.round((uCount / total) * 10);
+        const nBars = Math.round((nCount / total) * 10);
+        const gBars = Math.max(0, 10 - uBars - nBars);
+        const compBar = '💎'.repeat(uBars) + '📱'.repeat(nBars) + '🎁'.repeat(gBars);
+
+        // ===== INSIGHT LOGIC =====
+        let insight = 'Standard Portfolio';
+        if (uCount > nCount && uCount > gCount) insight = 'Username Mogul';
+        else if (nCount > uCount && nCount > gCount) insight = 'Number Collector';
+        else if (gCount > uCount && gCount > nCount) insight = 'Gift Curator';
+        else if (netWorth > 5000) insight = 'Elite Investor';
+
+        // ===== BUILD OVERVIEW CAPTION =====
+        let caption = `🏦 *WALLET OVERVIEW* \`${walletAddress.substring(0, 8)}...${walletAddress.slice(-6)}\`\n`;
+        caption += `━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+        caption += `💎 *Liquid TON:* \`${formatNum(balance.toFixed(2))} TON\` (~$${formatNum(Math.round(liquidUsd))})\n\n`;
+
+        caption += `━━━━━━━ *Assets* ━━━━━━━\n\n`;
+        caption += `📦 *Total Items:* \`${totalAssets}\`\n`;
+        if (totalAssets > 0) {
+            caption += `${compBar}\n`;
+        }
+        caption += `• Names: \`${uCount}\` | Numbers: \`${nCount}\` | Gifts: \`${gCount}\`\n\n`;
+
+        caption += `🕒 *Last Active:* \`${lastSeen}\`\n`;
+        const walletStatus = portfolio?.status ? portfolio.status.toUpperCase() : 'ACTIVE';
+        const walletType = portfolio?.isWallet ? 'Contract' : 'Personal';
+        caption += `🚦 *Status:* \`${walletStatus}\` • \`${walletType}\`\n`;
+
+        // Collector Badges logic
+        const badges = [];
+        if (portfolio?.usernames?.some(u => u.name.length <= 4)) badges.push('🎖️ 4-Char');
+        if (nCount >= 10) badges.push('📱 Hoarder');
+        if (uCount >= 50) badges.push('💎 Legend');
+        if (gCount >= 10) badges.push('🎁 Gifted');
+        if (uCount > 0 && nCount > 0 && gCount > 0) badges.push('🌈 Diversified');
+
+        if (badges.length > 0) {
+            caption += `\n⛓️ *Badges:* ${badges.join(' • ')}\n`;
+        }
+
+        caption += `\n━━━━━━━━━━━━━━━━━━━━━━\n`;
+        caption += `_Select an option below for deep analysis._`;
+
+        // Store for details & pagination
         const cacheKey = `${ctx.chat.id}`;
         paginationCache.set(cacheKey, {
             portfolio,
             walletAddress,
+            usernameStatuses: new Array(uCount).fill(''),
+            numberStatuses: new Array(nCount).fill(''),
             timestamp: Date.now()
         });
 
-        // ======================================================
-        // MESSAGE 1: USERNAMES (Page 1)
-        // ======================================================
-
-        const msg1 = await ctx.reply(`💎 *Scanning ${portfolio.usernames.length} Usernames...*`, { parse_mode: 'Markdown' });
-
-        // Check activity for first batch
-        const USERNAMES_TO_CHECK = portfolio.usernames.slice(0, 20);
-        const usernameStatuses = [];
-
-        for (const u of portfolio.usernames) {
-            let status = '';
-            if (USERNAMES_TO_CHECK.includes(u)) {
-                const check = await telegramClient.checkUsername(u.name);
-                status = check.active ? ' ✅' : ' 💤';
-            }
-            usernameStatuses.push(status);
-        }
-
-        // Store statuses for pagination
-        paginationCache.get(cacheKey).usernameStatuses = usernameStatuses;
-
-        const usernameMsg = formatUsernamesPage(portfolio.usernames, usernameStatuses, 0);
-        const usernameKeyboard = getUsernamesKeyboard(portfolio.usernames.length, 0);
-
-        await ctx.telegram.editMessageText(ctx.chat.id, msg1.message_id, undefined, usernameMsg.text, {
-            parse_mode: 'Markdown',
-            reply_markup: usernameKeyboard
-        }).catch(async () => {
-            await ctx.replyWithMarkdown(usernameMsg.text, { reply_markup: usernameKeyboard });
-        });
-
-        // ======================================================
-        // MESSAGE 2: ANONYMOUS NUMBERS (Page 1)
-        // ======================================================
-
-        const msg2 = await ctx.reply(`📱 *Checking ${portfolio.anonymousNumbers.length} Numbers...*`, { parse_mode: 'Markdown' });
-
-        const NUMBERS_TO_CHECK = portfolio.anonymousNumbers.slice(0, 5);
-        const numberStatuses = [];
-
-        for (const n of portfolio.anonymousNumbers) {
-            let status = '';
-            if (NUMBERS_TO_CHECK.includes(n)) {
-                const check = await telegramClient.checkPhoneNumber(n.number);
-                status = check.registered ? ' 🟢' : ' ⚫';
-            }
-            numberStatuses.push(status);
-        }
-
-        paginationCache.get(cacheKey).numberStatuses = numberStatuses;
-
-        const numberMsg = formatNumbersPage(portfolio.anonymousNumbers, numberStatuses, 0);
-        const numberKeyboard = getNumbersKeyboard(portfolio.anonymousNumbers.length, 0);
-
-        await ctx.telegram.editMessageText(ctx.chat.id, msg2.message_id, undefined, numberMsg.text, {
-            parse_mode: 'Markdown',
-            reply_markup: numberKeyboard
-        }).catch(async () => {
-            await ctx.replyWithMarkdown(numberMsg.text, { reply_markup: numberKeyboard });
-        });
-
-        // ======================================================
-        // MESSAGE 3: NFT GIFTS (Page 1)
-        // ======================================================
-
-        const msg3 = await ctx.reply(`🎁 *Loading Gifts...*`, { parse_mode: 'Markdown' });
-
-        const giftMsg = formatGiftsPage(gifts, 0);
-        const giftKeyboard = getGiftsKeyboard(gifts.length, 0);
-
-        await ctx.telegram.editMessageText(ctx.chat.id, msg3.message_id, undefined, giftMsg.text, {
-            parse_mode: 'Markdown',
-            reply_markup: giftKeyboard
-        }).catch(async () => {
-            await ctx.replyWithMarkdown(giftMsg.text, { reply_markup: giftKeyboard });
-        });
-
-        // ======================================================
-        // MESSAGE 4: ENHANCED PORTFOLIO ANALYSIS
-        // ======================================================
-
-        const totalAssets = portfolio.totalUsernames + portfolio.totalNumbers + totalGifts;
-        const uCount = portfolio.totalUsernames;
-        const nCount = portfolio.totalNumbers;
-        const gCount = totalGifts;
-
-        // ===== WHALE RANK =====
-        let whaleRank = '🦐 Shrimp';
-        if (totalAssets > 500) whaleRank = '🐋 MEGA WHALE';
-        else if (totalAssets > 200) whaleRank = '🐋 Whale';
-        else if (totalAssets > 100) whaleRank = '🦈 Shark';
-        else if (totalAssets > 50) whaleRank = '🐬 Dolphin';
-        else if (totalAssets > 20) whaleRank = '🦀 Crab';
-        else if (totalAssets > 5) whaleRank = '🐟 Fish';
-
-        // ===== DISTRIBUTION BAR =====
-        const total = Math.max(totalAssets, 1);
-        const uPct = Math.round((uCount / total) * 100);
-        const nPct = Math.round((nCount / total) * 100);
-        const gPct = Math.round((gCount / total) * 100);
-
-        const makeBar = (pct) => {
-            const filled = Math.round(pct / 10);
-            return '█'.repeat(filled) + '░'.repeat(10 - filled);
+        const mainKeyboard = {
+            inline_keyboard: [
+                [
+                    { text: `💎 Usernames (${uCount})`, callback_data: 'wt_view_user' },
+                    { text: `📱 Numbers (${nCount})`, callback_data: 'wt_view_num' }
+                ],
+                [{ text: `🎁 Official Gifts (${gCount})`, callback_data: 'wt_view_gift' }],
+                [
+                    { text: '🔗 TonViewer', url: `https://tonviewer.com/${walletAddress}` },
+                    { text: '💎 Fragment', url: `https://fragment.com/?query=${walletAddress}` }
+                ],
+                [{ text: '🔙 Main Menu', callback_data: 'back_to_menu' }]
+            ]
         };
 
-        const distributionBar = totalAssets > 0 ? `
-📊 *Distribution:*
-\`${makeBar(uPct)}\` 💎 ${uPct}%
-\`${makeBar(nPct)}\` 📱 ${nPct}%
-\`${makeBar(gPct)}\` 🎁 ${gPct}%` : '';
+        await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id).catch(() => { });
 
-        // ===== COLLECTOR BADGES =====
-        const badges = [];
+        // Try to generate and send with image card, fallback to text-only
+        let cardSent = false;
+        try {
+            const cardData = {
+                address: walletAddress,
+                rank: rank.split(' ')[1] || rank,
+                netWorth: netWorth,
+                tonPrice: tonPrice,
+                usernameCount: uCount,
+                numberCount: nCount,
+                giftCount: gCount,
+                balance: balance,
+                lastActivity: lastSeen,
+                status: walletStatus
+            };
+            
+            console.log(`📸 (WT) Attempting to generate card for ${walletAddress}...`);
+            const imageBuffer = await generateWalletCard(cardData);
 
-        // Check for 4-char username
-        const has4Char = portfolio.usernames.some(u => u.name.length <= 4);
-        if (has4Char) badges.push('🎖️ 4-Char Owner');
-
-        // Check for 5-char username
-        const has5Char = portfolio.usernames.some(u => u.name.length === 5);
-        if (has5Char && !has4Char) badges.push('💠 5-Char Owner');
-
-        // Number hoarder
-        if (nCount >= 10) badges.push('📱 Number Hoarder');
-        else if (nCount >= 5) badges.push('📞 Number Collector');
-
-        // Username collector
-        if (uCount >= 50) badges.push('💎 Username Legend');
-        else if (uCount >= 20) badges.push('💎 Username Master');
-        else if (uCount >= 10) badges.push('💎 Username Hunter');
-
-        // Gift enthusiast
-        if (gCount >= 20) badges.push('🎁 Gift King');
-        else if (gCount >= 10) badges.push('🎁 Gift Lover');
-
-        // Whale badge
-        if (totalAssets >= 100) badges.push('🐋 Big Player');
-
-        // Diversified
-        if (uCount > 0 && nCount > 0 && gCount > 0) badges.push('🌈 Diversified');
-
-        const badgesText = badges.length > 0
-            ? `\n\n🏆 *Badges:*\n${badges.join(' • ')}`
-            : '';
-
-        // ===== CROWN JEWEL =====
-        let crownJewel = '';
-        if (portfolio.usernames.length > 0) {
-            const shortest = portfolio.usernames.reduce((prev, curr) =>
-                curr.name.length < prev.name.length ? curr : prev
-            );
-            const stars = shortest.name.length <= 4 ? '⭐⭐⭐' :
-                shortest.name.length <= 5 ? '⭐⭐' : '⭐';
-            crownJewel = `\n\n👑 *Crown Jewel:* @${shortest.name.replace(/_/g, '\\_')} (${shortest.name.length} chars) ${stars}`;
+            if (imageBuffer) {
+                // Telegram caption limit is 1024. If caption too long, we might need to send it separately
+                const safeCaption = caption.length > 1000 ? caption.substring(0, 1000) + "..." : caption;
+                
+                await ctx.replyWithPhoto({ source: imageBuffer }, {
+                    caption: safeCaption,
+                    parse_mode: 'Markdown',
+                    reply_markup: mainKeyboard
+                });
+                cardSent = true;
+                console.log(`✅ (WT) Card sent successfully to ${ctx.from.id}`);
+            } else {
+                console.warn(`⚠️ (WT) generateWalletCard returned null for ${walletAddress}`);
+            }
+        } catch (cardErr) {
+            console.error('❌ (WT) Card generation/send failed:', cardErr.message);
         }
 
-        // ===== PREMIUM ASSETS LIST =====
-        let premiumList = '';
-        const premium4Chars = portfolio.usernames.filter(u => u.name.length <= 4).slice(0, 3);
-        const premium5Chars = portfolio.usernames.filter(u => u.name.length === 5).slice(0, 3);
-
-        if (premium4Chars.length > 0 || premium5Chars.length > 0) {
-            premiumList = '\n\n💎 *Premium Assets:*';
-            if (premium4Chars.length > 0) {
-                premiumList += `\n   4-char: ${premium4Chars.map(u => '@' + u.name.replace(/_/g, '\\_')).join(', ')}`;
-            }
-            if (premium5Chars.length > 0) {
-                premiumList += `\n   5-char: ${premium5Chars.map(u => '@' + u.name.replace(/_/g, '\\_')).join(', ')}`;
-            }
+        // Fallback: send as text message if card generation failed
+        if (!cardSent) {
+            await ctx.reply(caption, {
+                parse_mode: 'Markdown',
+                reply_markup: mainKeyboard,
+                disable_web_page_preview: true
+            });
         }
 
-        // ===== BUILD FINAL MESSAGE =====
-        const overviewMsg = `
-🏦 *Portfolio Analysis*
-━━━━━━━━━━━━━━━━━━
-
-${whaleRank}
-${distributionBar}
-
-📦 *Assets:*
-• 💎 Usernames: ${formatNum(uCount)}
-• 📱 Numbers: ${formatNum(nCount)}
-• 🎁 Gifts: ${formatNum(gCount)}
-• � *Total:* ${formatNum(totalAssets)}${badgesText}${crownJewel}${premiumList}
-
-🔗 \`${walletAddress.substring(0, 8)}...${walletAddress.slice(-6)}\`
-
-━━━━━━━━━━━━━━━━━━
-📢 @FragmentsCommunity
-`;
-
-        await ctx.replyWithMarkdown(overviewMsg, {
-            reply_markup: {
-                inline_keyboard: [
-                    [
-                        { text: '🔗 TonViewer', url: `https://tonviewer.com/${walletAddress}` },
-                        { text: '💎 Fragment', url: `https://fragment.com/?query=${walletAddress}` }
-                    ],
-                    [{ text: '🔙 Main Menu', callback_data: 'back_to_menu' }]
-                ]
-            }
-        });
+        // Start background scanning in silent mode
+        populateAllRemainingStatuses(cacheKey).catch(e => console.error('BG Scan error:', e));
 
     } catch (error) {
         console.error('Wallet Report Error:', error);
-        await ctx.reply(`❌ Error generating report: ${error.message}`);
+        await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id).catch(() => { });
+        await ctx.reply(`❌ *An unexpected error occurred.*\n\n_${error.message}_`, {
+            parse_mode: 'Markdown',
+            reply_markup: {
+                inline_keyboard: [[{ text: '🔙 Main Menu', callback_data: 'back_to_menu' }]]
+            }
+        });
     }
+}
+
+// ======================================================
+// NEW DETAIL VIEW HANDLERS
+// ======================================================
+
+export async function handleViewUsernames(ctx) {
+    const cached = paginationCache.get(`${ctx.chat.id}`);
+    if (!cached) return ctx.answerCbQuery('⚠️ Session expired.');
+
+    const msg = formatUsernamesPage(cached.portfolio.usernames, cached.usernameStatuses, 0);
+    const keyboard = getUsernamesKeyboard(cached.portfolio.usernames.length, 0);
+
+    return smartEdit(ctx, msg.text, keyboard);
+}
+
+export async function handleViewNumbers(ctx) {
+    const cached = paginationCache.get(`${ctx.chat.id}`);
+    if (!cached) return ctx.answerCbQuery('⚠️ Session expired.');
+
+    const msg = formatNumbersPage(cached.portfolio.anonymousNumbers, cached.numberStatuses, 0);
+    const keyboard = getNumbersKeyboard(cached.portfolio.anonymousNumbers.length, 0);
+
+    return smartEdit(ctx, msg.text, keyboard);
+}
+
+export async function handleViewGifts(ctx) {
+    const cached = paginationCache.get(`${ctx.chat.id}`);
+    if (!cached) return ctx.answerCbQuery('⚠️ Session expired.');
+
+    const msg = formatGiftsPage(cached.portfolio.gifts, 0);
+    const keyboard = getGiftsKeyboard(cached.portfolio.gifts.length, 0);
+
+    return smartEdit(ctx, msg.text, keyboard);
+}
+
+export async function handleOverviewBack(ctx) {
+    const cached = paginationCache.get(`${ctx.chat.id}`);
+    if (!cached) return ctx.answerCbQuery('⚠️ Session expired.');
+
+    // We can't easily "un-edit" text back to photo+caption if it was a photo message.
+    // If we want to return from list view (text) to overview (photo), we better resend or 
+    // just change the text of the existing message to the overview text.
+    // However, the original overview had a photo.
+    // Let's just update the text for now, or re-generate.
+
+    const { portfolio, walletAddress } = cached;
+    const uCount = portfolio.usernames.length;
+    const nCount = portfolio.anonymousNumbers.length;
+    const gCount = portfolio.totalGifts || 0;
+    const totalAssets = uCount + nCount + gCount;
+
+    const netWorth = (portfolio.balance || 0) + (portfolio.estimatedValue || 0);
+
+    let rank = '🦐 Shrimp';
+    if (netWorth > 100000) rank = '🐋 MEGA WHALE';
+    else if (netWorth > 50000) rank = '🐋 Whale';
+    else if (netWorth > 10000) rank = '🦈 Shark';
+    else if (netWorth > 1000) rank = '🐬 Dolphin';
+    else if (netWorth > 100) rank = '🦀 Crab';
+    else if (netWorth > 10) rank = '🐟 Fish';
+
+    const lastSeen = portfolio.lastActivity
+        ? new Date(portfolio.lastActivity * 1000).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+        : 'Unknown';
+
+    const tonPrice = tonPriceCache.get('price') || 5.5;
+    const balance = portfolio.balance || 0;
+    const liquidUsd = balance * tonPrice;
+    const netWorthUsd = netWorth * tonPrice;
+
+    const total = totalAssets || 1;
+    const uBars = Math.round((uCount / total) * 10);
+    const nBars = Math.round((nCount / total) * 10);
+    const gBars = Math.max(0, 10 - uBars - nBars);
+    const compBar = '💎'.repeat(uBars) + '📱'.repeat(nBars) + '🎁'.repeat(gBars);
+
+    let insight = 'Standard Portfolio';
+    if (uCount > nCount && uCount > gCount) insight = 'Username Mogul';
+    else if (nCount > uCount && nCount > gCount) insight = 'Number Collector';
+    else if (gCount > uCount && gCount > nCount) insight = 'Gift Curator';
+
+    let caption = `🏦 *WALLET OVERVIEW* \`${walletAddress.substring(0, 8)}...${walletAddress.slice(-6)}\`\n`;
+    caption += `━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    caption += `💎 *Liquid TON:* \`${formatNum(balance.toFixed(2))} TON\` (~$${formatNum(Math.round(liquidUsd))})\n\n`;
+
+    caption += `━━━━━━━ *Assets* ━━━━━━━\n\n`;
+    caption += `📦 *Total Items:* \`${totalAssets}\`\n`;
+    caption += `${compBar}\n`;
+    caption += `• Names: \`${uCount}\` | Numbers: \`${nCount}\` | Gifts: \`${gCount}\`\n\n`;
+
+    caption += `🕒 *Last Activity:* \`${lastSeen}\`\n`;
+    const walletStatus = portfolio?.status ? portfolio.status.toUpperCase() : 'ACTIVE';
+    const walletType = portfolio?.isWallet ? 'Contract' : 'Personal';
+    caption += `🚦 *Status:* \`${walletStatus}\` • \`${walletType}\`\n`;
+    caption += `━━━━━━━━━━━━━━━━━━━━━━\n`;
+    caption += `_Select an option below for deep analysis._`;
+
+    const mainKeyboard = {
+        inline_keyboard: [
+            [
+                { text: `💎 Usernames (${uCount})`, callback_data: 'wt_view_user' },
+                { text: `📱 Numbers (${nCount})`, callback_data: 'wt_view_num' }
+            ],
+            [{ text: `🎁 Official Gifts (${gCount})`, callback_data: 'wt_view_gift' }],
+            [
+                { text: '🔗 TonViewer', url: `https://tonviewer.com/${walletAddress}` },
+                { text: '💎 Fragment', url: `https://fragment.com/?query=${walletAddress}` }
+            ],
+            [{ text: '🔙 Main Menu', callback_data: 'back_to_menu' }]
+        ]
+    };
+
+    return smartEdit(ctx, caption, mainKeyboard);
 }
 
 // ======================================================
@@ -319,31 +425,80 @@ function formatNumbersPage(numbers, statuses, page) {
 
 function formatGiftsPage(gifts, page) {
     const total = gifts.length;
-    const totalCount = gifts.reduce((sum, g) => sum + (g.count || 1), 0);
     const start = page * ITEMS_PER_PAGE;
     const end = Math.min(start + ITEMS_PER_PAGE, total);
     const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
 
-    let text = `🎁 *Official Telegram Gifts* (${totalCount})\n`;
+    let text = `🎁 *Official Gifts* (${total})\n`;
     text += `━━━━━━━━━━━━━━━━\n\n`;
 
     if (total === 0) {
-        text += '_No official Telegram gifts found._';
+        text += '_No official gifts found in this wallet._';
         return { text };
     }
 
     const pageItems = gifts.slice(start, end);
+    const buttons = [];
+
     pageItems.forEach((g, i) => {
         const globalIndex = start + i + 1;
-        const countText = g.count > 1 ? ` ×${g.count}` : '';
-        text += `${globalIndex}. ${g.collection || g.name}${countText}\n`;
+        text += `${globalIndex}. *${g.name}*\n`;
+        if (g.collection?.name) text += `   └ _${g.collection.name}_\n`;
+        
+        // Button for each gift on the page
+        buttons.push([{ text: `🔍 Details: ${g.name}`, callback_data: `wt_gift_det_${start + i}` }]);
     });
 
     if (totalPages > 1) {
         text += `\n📄 _Page ${page + 1}/${totalPages}_`;
     }
 
-    return { text };
+    const navButtons = [];
+    if (page > 0) navButtons.push({ text: '◀️ Prev', callback_data: `wt_gift_${page - 1}` });
+    if (page < totalPages - 1) navButtons.push({ text: 'Next ▶️', callback_data: `wt_gift_${page + 1}` });
+
+    const keyboard = {
+        inline_keyboard: [
+            ...buttons,
+            navButtons.length > 0 ? navButtons : [],
+            [{ text: '🔙 Back to Overview', callback_data: 'wt_overview' }]
+        ]
+    };
+
+    return { text, keyboard };
+}
+
+export async function handleGiftDetail(ctx, index) {
+    const cacheKey = `${ctx.chat.id}`;
+    const cached = paginationCache.get(cacheKey);
+    if (!cached) return ctx.answerCbQuery('⚠️ Session expired.');
+
+    const gift = cached.portfolio.gifts[index];
+    if (!gift) return ctx.answerCbQuery('⚠️ Gift not found.');
+
+    let report = `🎁 *Gift Detail: ${gift.name}*\n`;
+    report += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    
+    if (gift.collection) {
+        report += `📦 *Collection:* \`${gift.collection.name}\`\n`;
+        if (gift.collection.description) {
+            const desc = gift.collection.description.length > 200 ? gift.collection.description.substring(0, 200) + '...' : gift.collection.description;
+            report += `📝 *Description:* _${desc}_\n`;
+        }
+    }
+
+    if (gift.metadata?.attributes && Array.isArray(gift.metadata.attributes)) {
+        const attrs = gift.metadata.attributes.map(a => `• ${a.trait_type}: *${a.value}*`).join('\n');
+        if (attrs) report += `\n🧬 *Attributes:*\n${attrs}\n`;
+    }
+
+    report += `\n🔗 [View on TonViewer](https://tonviewer.com/${gift.address})`;
+
+    const keyboard = {
+        inline_keyboard: [[{ text: '⬅️ Back to List', callback_data: 'wt_view_gift' }]]
+    };
+
+    return smartEdit(ctx, report, keyboard);
 }
 
 // ======================================================
@@ -352,8 +507,6 @@ function formatGiftsPage(gifts, page) {
 
 function getUsernamesKeyboard(total, page) {
     const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
-    if (totalPages <= 1) return undefined;
-
     const buttons = [];
     if (page > 0) {
         buttons.push({ text: '◀️ Prev', callback_data: `wt_user_${page - 1}` });
@@ -362,13 +515,15 @@ function getUsernamesKeyboard(total, page) {
         buttons.push({ text: 'Next ▶️', callback_data: `wt_user_${page + 1}` });
     }
 
-    return { inline_keyboard: [buttons] };
+    const rows = [];
+    if (buttons.length > 0) rows.push(buttons);
+    rows.push([{ text: '🔙 Back to Overview', callback_data: 'wt_overview' }]);
+
+    return { inline_keyboard: rows };
 }
 
 function getNumbersKeyboard(total, page) {
     const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
-    if (totalPages <= 1) return undefined;
-
     const buttons = [];
     if (page > 0) {
         buttons.push({ text: '◀️ Prev', callback_data: `wt_num_${page - 1}` });
@@ -377,13 +532,15 @@ function getNumbersKeyboard(total, page) {
         buttons.push({ text: 'Next ▶️', callback_data: `wt_num_${page + 1}` });
     }
 
-    return { inline_keyboard: [buttons] };
+    const rows = [];
+    if (buttons.length > 0) rows.push(buttons);
+    rows.push([{ text: '🔙 Back to Overview', callback_data: 'wt_overview' }]);
+
+    return { inline_keyboard: rows };
 }
 
 function getGiftsKeyboard(total, page) {
     const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
-    if (totalPages <= 1) return undefined;
-
     const buttons = [];
     if (page > 0) {
         buttons.push({ text: '◀️ Prev', callback_data: `wt_gift_${page - 1}` });
@@ -392,14 +549,22 @@ function getGiftsKeyboard(total, page) {
         buttons.push({ text: 'Next ▶️', callback_data: `wt_gift_${page + 1}` });
     }
 
-    return { inline_keyboard: [buttons] };
+    const rows = [];
+    if (buttons.length > 0) rows.push(buttons);
+    rows.push([{ text: '🔙 Back to Overview', callback_data: 'wt_overview' }]);
+
+    return { inline_keyboard: rows };
 }
 
 // ======================================================
 // PAGINATION HANDLERS (to be called from bot.js)
 // ======================================================
 
-export function handleUsernamePagination(ctx, page) {
+// ======================================================
+// PAGINATION HANDLERS (to be called from bot.js)
+// ======================================================
+
+export async function handleUsernamePagination(ctx, page) {
     const cacheKey = `${ctx.chat.id}`;
     const cached = paginationCache.get(cacheKey);
 
@@ -407,17 +572,49 @@ export function handleUsernamePagination(ctx, page) {
         return ctx.answerCbQuery('⚠️ Session expired. Please scan again.');
     }
 
-    const { portfolio, usernameStatuses } = cached;
-    const msg = formatUsernamesPage(portfolio.usernames, usernameStatuses || [], page);
+    const { portfolio } = cached;
+    let { usernameStatuses } = cached;
+
+    if (!usernameStatuses) {
+        usernameStatuses = new Array(portfolio.usernames.length).fill('');
+    }
+
+    const start = page * ITEMS_PER_PAGE;
+    const end = Math.min(start + ITEMS_PER_PAGE, portfolio.usernames.length);
+
+    // Filter which items on this page need checking
+    const needsChecking = [];
+    for (let i = start; i < end; i++) {
+        if (!usernameStatuses[i]) {
+            needsChecking.push(i);
+        }
+    }
+
+    if (needsChecking.length > 0) {
+        // Inform user we are checking...
+        await ctx.answerCbQuery('⏳ Checking status of usernames on this page...');
+
+        // Check them one by one (executeWithSmartRetry handles rotation)
+        for (const index of needsChecking) {
+            try {
+                const check = await telegramClient.checkUsername(portfolio.usernames[index].name);
+                usernameStatuses[index] = check.active ? ' ✅' : ' 💤';
+            } catch (e) {
+                usernameStatuses[index] = ' ❓';
+            }
+        }
+
+        cached.usernameStatuses = usernameStatuses;
+        paginationCache.set(cacheKey, cached);
+    }
+
+    const msg = formatUsernamesPage(portfolio.usernames, usernameStatuses, page);
     const keyboard = getUsernamesKeyboard(portfolio.usernames.length, page);
 
-    return ctx.editMessageText(msg.text, {
-        parse_mode: 'Markdown',
-        reply_markup: keyboard
-    });
+    return smartEdit(ctx, msg.text, keyboard);
 }
 
-export function handleNumberPagination(ctx, page) {
+export async function handleNumberPagination(ctx, page) {
     const cacheKey = `${ctx.chat.id}`;
     const cached = paginationCache.get(cacheKey);
 
@@ -425,14 +622,43 @@ export function handleNumberPagination(ctx, page) {
         return ctx.answerCbQuery('⚠️ Session expired. Please scan again.');
     }
 
-    const { portfolio, numberStatuses } = cached;
-    const msg = formatNumbersPage(portfolio.anonymousNumbers, numberStatuses || [], page);
+    const { portfolio } = cached;
+    let { numberStatuses } = cached;
+
+    if (!numberStatuses) {
+        numberStatuses = new Array(portfolio.anonymousNumbers.length).fill('');
+    }
+
+    const start = page * ITEMS_PER_PAGE;
+    const end = Math.min(start + ITEMS_PER_PAGE, portfolio.anonymousNumbers.length);
+
+    const needsChecking = [];
+    for (let i = start; i < end; i++) {
+        if (!numberStatuses[i]) {
+            needsChecking.push(i);
+        }
+    }
+
+    if (needsChecking.length > 0) {
+        await ctx.answerCbQuery('⏳ Checking registration of numbers on this page...');
+
+        for (const index of needsChecking) {
+            try {
+                const check = await telegramClient.checkPhoneNumber(portfolio.anonymousNumbers[index].number);
+                numberStatuses[index] = check.registered ? ' 🟢' : ' ⚫';
+            } catch (e) {
+                numberStatuses[index] = ' ❓';
+            }
+        }
+
+        cached.numberStatuses = numberStatuses;
+        paginationCache.set(cacheKey, cached);
+    }
+
+    const msg = formatNumbersPage(portfolio.anonymousNumbers, numberStatuses, page);
     const keyboard = getNumbersKeyboard(portfolio.anonymousNumbers.length, page);
 
-    return ctx.editMessageText(msg.text, {
-        parse_mode: 'Markdown',
-        reply_markup: keyboard
-    });
+    return smartEdit(ctx, msg.text, keyboard);
 }
 
 export function handleGiftPagination(ctx, page) {
@@ -448,10 +674,58 @@ export function handleGiftPagination(ctx, page) {
     const msg = formatGiftsPage(gifts, page);
     const keyboard = getGiftsKeyboard(gifts.length, page);
 
-    return ctx.editMessageText(msg.text, {
-        parse_mode: 'Markdown',
-        reply_markup: keyboard
-    });
+    return smartEdit(ctx, msg.text, keyboard);
+}
+
+// ======================================================
+// BACKGROUND PROCESSING
+// ======================================================
+
+/**
+ * Checks all remaining usernames and numbers in the background
+ */
+async function populateAllRemainingStatuses(cacheKey) {
+    // Wait a bit to let initial messages send
+    await new Promise(r => setTimeout(r, 5000));
+
+    const cached = paginationCache.get(cacheKey);
+    if (!cached) return;
+
+    const { portfolio } = cached;
+
+    // 1. Process Usernames
+    for (let i = 0; i < portfolio.usernames.length; i++) {
+        const fresh = paginationCache.get(cacheKey);
+        if (!fresh) return; // Cache cleared
+
+        if (!fresh.usernameStatuses[i]) {
+            try {
+                const check = await telegramClient.checkUsername(portfolio.usernames[i].name);
+                fresh.usernameStatuses[i] = check.active ? ' ✅' : ' 💤';
+                paginationCache.set(cacheKey, fresh);
+            } catch (e) { }
+            // Small delay to respect rate limits
+            await new Promise(r => setTimeout(r, 300));
+        }
+    }
+
+    // 2. Process Numbers
+    for (let i = 0; i < portfolio.anonymousNumbers.length; i++) {
+        const fresh = paginationCache.get(cacheKey);
+        if (!fresh) return;
+
+        if (!fresh.numberStatuses[i]) {
+            try {
+                const check = await telegramClient.checkPhoneNumber(portfolio.anonymousNumbers[i].number);
+                fresh.numberStatuses[i] = check.registered ? ' 🟢' : ' ⚫';
+                paginationCache.set(cacheKey, fresh);
+            } catch (e) { }
+            // Longer delay for numbers (sensitive)
+            await new Promise(r => setTimeout(r, 1000));
+        }
+    }
+
+    console.log(`✅ Background scan completed for wallet in chat ${cacheKey}`);
 }
 
 // Cleanup old cache entries (older than 30 minutes)

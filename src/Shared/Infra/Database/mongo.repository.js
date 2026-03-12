@@ -13,7 +13,10 @@ export async function connectDB() {
     if (db) return db;
 
     try {
-        client = new MongoClient(MONGO_URI);
+        client = new MongoClient(MONGO_URI, {
+            serverSelectionTimeoutMS: 5000,
+            connectTimeoutMS: 5000
+        });
         await client.connect();
         db = client.db(DB_NAME);
         console.log('✅ MongoDB connected');
@@ -328,5 +331,55 @@ export async function countAccounts() {
         return await db.collection('accounts').countDocuments();
     } catch (error) {
         return 0;
+    }
+}
+/**
+ * Save a GiftAsset API token to MongoDB
+ */
+export async function addGiftAssetToken(token) {
+    if (!db) return false;
+    try {
+        await db.collection('gift_asset_tokens').updateOne(
+            { token },
+            { 
+                $set: { token, createdAt: new Date() } 
+            },
+            { upsert: true }
+        );
+        return true;
+    } catch (error) {
+        console.error('Failed to add GiftAsset token:', error.message);
+        return false;
+    }
+}
+
+/**
+ * Load all GiftAsset API tokens from MongoDB
+ */
+export async function loadGiftAssetTokens() {
+    if (!db) {
+        await connectDB();
+        if (!db) return [];
+    }
+    try {
+        const results = await db.collection('gift_asset_tokens').find({}).toArray();
+        return results.map(r => r.token);
+    } catch (error) {
+        console.error('Failed to load GiftAsset tokens:', error.message);
+        return [];
+    }
+}
+
+/**
+ * Delete a GiftAsset API token from MongoDB
+ */
+export async function deleteGiftAssetToken(token) {
+    if (!db) return false;
+    try {
+        await db.collection('gift_asset_tokens').deleteOne({ token });
+        return true;
+    } catch (error) {
+        console.error('Failed to delete GiftAsset token:', error.message);
+        return false;
     }
 }

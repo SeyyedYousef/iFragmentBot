@@ -119,12 +119,13 @@ export async function getBrowser() {
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
                 '--disable-gpu',
+                '--disable-software-rasterizer',
                 '--disable-extensions',
                 '--disable-component-extensions-with-background-pages',
                 '--mute-audio',
                 '--disable-default-apps',
                 '--disable-features=Translate,BackForwardCache,AcceptCHFrame,MediaRouter,OptimizationHints',
-                '--js-flags="--max-old-space-size=512"'
+                '--js-flags="--max-old-space-size=400"'
             ]
         };
 
@@ -144,7 +145,7 @@ export async function getBrowser() {
 
         try {
             // Add a timeout to the launch process to prevent indefinite hanging
-            const timeoutPromise = new Promise((_, reject) => 
+            const timeoutPromise = new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('Browser launch timed out after 30s')), 30000)
             );
 
@@ -259,7 +260,7 @@ async function generateFallbackImage(username) {
     console.log('🔄 Using fallback AI image...');
     try {
         const prompt = `A premium futuristic digital billboard in a luxury airport terminal, minimalist modern design, the billboard displays "@${username}" in large glowing neon cyan letters, dark ambient lighting with blue and purple accent lights, 8k quality, photorealistic, cinematic`;
-        
+
         // Use a more reliable endpoint or handle failure
         const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=768&model=flux&nologo=true`;
 
@@ -570,3 +571,71 @@ export async function generateMarketCard(data) {
         throw error;
     }
 }
+
+export async function generateWalletCard(data) {
+    try {
+        const browser = await getBrowser();
+        const page = await browser.newPage();
+        try {
+            await page.setViewport({ width: 1080, height: 1080, deviceScaleFactor: 1 });
+
+            const templatePath = join(__dirname, '../Templates/wallet-card.template.html');
+            if (!existsSync(templatePath)) {
+                console.warn('⚠️ Wallet card template not found, skipping card generation');
+                return null;
+            }
+
+            let html = readFileSync(templatePath, 'utf-8');
+
+            // Rank emoji mapping
+            const rankEmojiMap = {
+                'Shrimp': '🦐', 'Fish': '🐟', 'Crab': '🦀',
+                'Dolphin': '🐬', 'Shark': '🦈', 'Whale': '🐋', 'MEGA WHALE': '🐋'
+            };
+            const rankEmoji = rankEmojiMap[data.rank] || '🐟';
+
+            // Calculate USD estimate
+            const tonPrice = data.tonPrice || 1.5;
+            const netWorthUsd = Math.round((data.netWorth || 0) * tonPrice).toLocaleString();
+
+            const replacements = {
+                '{{ADDRESS}}': data.address ? `${data.address.substring(0, 8)}...${data.address.slice(-6)}` : 'Unknown',
+                '{{RANK}}': data.rank || 'Shrimp',
+                '{{RANK_EMOJI}}': rankEmoji,
+                '{{NET_WORTH}}': data.netWorth ? Math.round(data.netWorth).toLocaleString() : '0',
+                '{{NET_WORTH_USD}}': netWorthUsd,
+                '{{USERNAMES}}': String(data.usernameCount || '0'),
+                '{{NUMBERS}}': String(data.numberCount || '0'),
+                '{{GIFTS}}': String(data.giftCount || '0'),
+                '{{BALANCE}}': data.balance ? Number(data.balance).toLocaleString(undefined, { maximumFractionDigits: 2 }) : '0',
+                '{{LAST_ACTIVITY}}': data.lastActivity || 'N/A',
+                '{{STATUS}}': data.status || 'ACTIVE'
+            };
+
+            for (const [key, val] of Object.entries(replacements)) {
+                html = html.replace(new RegExp(key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), String(val));
+            }
+
+            await page.setContent(html, { waitUntil: 'networkidle2', timeout: 60000 });
+            await new Promise(r => setTimeout(r, 1500));
+
+            return await page.screenshot({ type: 'png', clip: { x: 0, y: 0, width: 1080, height: 1080 } });
+        } finally {
+            await page.close();
+        }
+    } catch (error) {
+        console.error('❌ Wallet Card error:', error.message);
+        return null; // Return null instead of throwing — allows text-only fallback
+    }
+}
+
+export default {
+    getBrowser,
+    getPage,
+    generateFlexCard,
+    generateNewsCard,
+    generateNewsCard2,
+    generateMarketCard,
+    generateWalletCard,
+    closeBrowser
+};

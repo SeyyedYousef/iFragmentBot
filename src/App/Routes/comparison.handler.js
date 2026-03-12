@@ -4,7 +4,7 @@ import { getTonPrice, scrapeFragment, generateShortInsight } from '../../Modules
 import { estimateValue, calculateRarity } from '../../core/Config/app.config.js';
 import { generateComparisonReport } from '../Helpers/report.helper.js';
 import { generateComparisonCard } from '../../Shared/UI/Components/comparison-card.component.js';
-import { useFeature, formatCreditsMessage, formatNoCreditsMessage, isPremium } from '../../Modules/User/Application/user.service.js';
+import { useFeature, formatCreditsMessage, formatNoCreditsMessage } from '../../Modules/User/Application/user.service.js';
 
 /**
  * Handle username comparison - fetch data and generate report
@@ -113,14 +113,8 @@ export async function handleComparison(ctx, username1, username2) {
 
         // Deduct credit and show remaining
         const creditResult = useFeature(ctx.from.id, 'compare');
-        const creditsMsg = formatCreditsMessage(creditResult.remaining, creditResult.isPremium);
-        if (!creditResult.isPremium) {
-            await ctx.replyWithMarkdown(creditsMsg, Markup.inlineKeyboard([
-                [Markup.button.callback('💎 Buy Premium', 'buy_premium')]
-            ]));
-        } else {
-            await ctx.replyWithMarkdown(creditsMsg);
-        }
+        const creditsMsg = formatCreditsMessage(creditResult.remaining);
+        await ctx.replyWithMarkdown(creditsMsg);
 
     } catch (error) {
         console.error('Comparison error (Fatal):', error);

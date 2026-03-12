@@ -10,6 +10,7 @@ import { giftValuationCache } from '../../../Shared/Infra/Cache/cache.service.js
 import * as salesHistory from './sales-history.service.js';
 import * as accountManager from '../../User/Application/account-manager.service.js';
 import { escapeMD } from '../../../App/Helpers/report.helper.js';
+import giftAssetAPI from '../Infrastructure/gift_asset.api.js';
 
 // API Configuration
 const MARKETAPP_API_BASE = 'https://api.marketapp.ws';
@@ -1372,21 +1373,15 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
     if (changesRarity) {
         if (changesRarity.model) {
             attributeRarities.model = changesRarity.model.tier.score;
-            if (attributeDetails.model) {
-                attributeDetails.model.changesRarity = changesRarity.model;
-            }
+            if (attributeDetails.model) attributeDetails.model.changesRarity = changesRarity.model;
         }
         if (changesRarity.backdrop) {
             attributeRarities.backdrop = changesRarity.backdrop.tier.score;
-            if (attributeDetails.backdrop) {
-                attributeDetails.backdrop.changesRarity = changesRarity.backdrop;
-            }
+            if (attributeDetails.backdrop) attributeDetails.backdrop.changesRarity = changesRarity.backdrop;
         }
         if (changesRarity.symbol) {
             attributeRarities.symbol = changesRarity.symbol.tier.score;
-            if (attributeDetails.symbol) {
-                attributeDetails.symbol.changesRarity = changesRarity.symbol;
-            }
+            if (attributeDetails.symbol) attributeDetails.symbol.changesRarity = changesRarity.symbol;
         }
     }
 
@@ -1395,7 +1390,7 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
     if (stats.floor) {
         collectionFloor = nanoToTon(stats.floor);
     }
-    const totalItems = stats.items || 0;
+    const totalItems = stats.items || 1; // avoid div by zero
     const owners = stats.owners || 0;
     const onSale = stats.on_sale_all || stats.on_sale_onchain || 0;
     const volume7d = nanoToTon(stats.volume7d);
@@ -1414,48 +1409,67 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 
     try {
         console.log('📊 Fetching See.tg data...');
-
-        // Get gift info from See.tg (includes owner)
         const seetgGift = await seetg.getGiftInfo(parsed.collectionSlug, parsed.itemNumber);
         if (seetgGift) {
-            console.log('✅ See.tg gift data:', JSON.stringify(seetgGift, null, 2));
-            seetgData.ownerUsername = seetgGift.ownerUsername;
-            seetgData.ownerName = seetgGift.ownerName;
+            seetgData.ownerUsername = seetgGift.owner?.username || seetgGift.ownerUsername;
+            seetgData.ownerName = seetgGift.owner?.name || seetgGift.ownerName;
             seetgData.rank = seetgGift.rank;
-            seetgData.image = seetgGift.image; // Capture image
         }
 
-        // If no owner username from gift, try to get it from wallet address
-        if (!seetgData.ownerUsername && giftOwner) {
-            console.log('📍 Trying to get owner info from wallet:', giftOwner);
-            const ownerInfo = await seetg.getOwnerInfo(giftOwner);
-            if (ownerInfo) {
-                console.log('✅ See.tg owner data:', ownerInfo.username || 'no username');
-                seetgData.ownerUsername = ownerInfo.username;
-                seetgData.ownerName = ownerInfo.name;
-            }
-        }
-
-        // Get floor changes
         const floorChanges = await seetg.getFloorChanges(parsed.collectionSlug);
         if (floorChanges) {
             seetgData.floorChange24h = floorChanges.change24h;
             seetgData.floorChange7d = floorChanges.change7d;
         }
 
-        // Get gift history (transfers)
         const history = await seetg.getGiftHistory(parsed.collectionSlug, parsed.itemNumber);
         if (history) {
             seetgData.transferCount = history.totalTransfers;
             seetgData.lastTransfer = history.lastTransfer;
-            seetgData.transfers = history.transfers || [];
         }
-
-    } catch (seetgError) {
-        console.warn('⚠️ See.tg API error:', seetgError.message);
+    } catch (e) {
+        console.warn('⚠️ See.tg API error:', e.message);
     }
 
-    // Get market prices for similar gifts
+    // ═══ GIFT-ASSET ENHANCED DATA ═══
+    let giftAssetData = null;
+    let giftAssetEmission = null;
+    let giftAssetCap = null;
+    let collectionOffers = null;
+    try {
+        const variants = [
+            `${parsed.collectionSlug}-${parsed.itemNumber}`,
+            `${collection.name.replace(/\s+/g, '')}-${parsed.itemNumber}`,
+            `${collection.name.replace(/\s+/g, '')}#${parsed.itemNumber}`,
+            `${collection.name}#${parsed.itemNumber}`,
+            `${collection.name.replace(/\s+/g, '-')}-${parsed.itemNumber}`
+        ];
+        
+        console.log(`🔗 [GiftAsset] Attempting variants: ${variants.join(', ')}`);
+
+        const [gaEmission, gaCap, gaOffers] = await Promise.all([
+            giftAssetAPI.getGiftsCollectionsEmission(),
+            giftAssetAPI.getGiftsCollectionsMarketCap(),
+            !collection.virtual ? giftAssetAPI.getCollectionOffers(collection.name) : null
+        ]);
+        
+        giftAssetEmission = gaEmission;
+        giftAssetCap = gaCap;
+        collectionOffers = gaOffers;
+
+        for (const variant of variants) {
+            const gaGift = await giftAssetAPI.getGiftByName(variant);
+            if (gaGift && gaGift.telegram_gift_name) {
+                giftAssetData = gaGift;
+                console.log(`✅ [GiftAsset] Found data for ${variant}!`);
+                break;
+            }
+        }
+    } catch (gaError) {
+        console.warn('⚠️ [GiftAsset] API error:', gaError.message);
+    }
+
+// Get market prices for similar gifts
     const marketPrices = await getMarketPricesForSimilarGifts(collection.address, parsed.collectionSlug, {
         model: giftAttributes.model,
         backdrop: giftAttributes.backdrop,
@@ -1547,12 +1561,25 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
     // ═══ 📊 COLLECTION STATS ═══
     report += `――――― 📊 *COLLECTION STATS* ―――――\n`;
     report += `▸ 🏛️ *${escapeMD(collection.name)}*\n`;
+    if (telegramInfo?.description) {
+        const desc = telegramInfo.description.substring(0, 100).replace(/\n/g, ' ');
+        report += `▸ 📝 _${escapeMD(desc)}..._\n`;
+    }
     report += `▸ 💰 Floor: *${formatNumber(Math.round(collectionFloor))} TON*\n`;
     report += `▸ #️⃣ Item: *#${formatNumber(parsed.itemNumber)}* of ${formatNumber(totalItems)}\n`;
     report += `▸ 🏪 On Sale: *${formatNumber(onSale)}* (${totalItems > 0 ? (onSale / totalItems * 100).toFixed(1) : 0}%)\n`;
     report += `▸ 👥 Owners: *${formatNumber(owners)}*\n`;
     if (volume7d > 0) {
         report += `▸ 📈 7d Vol: *${formatNumber(Math.round(volume7d))} TON*\n`;
+    }
+
+    // ═══ Gift-Asset: Emission / Upgrade Stats ═══
+    if (giftAssetEmission && collection.name) {
+        const emData = giftAssetEmission[collection.name];
+        if (emData) {
+            const upgradePct = emData.emission > 0 ? ((emData.upgraded / emData.emission) * 100).toFixed(1) : '0';
+            report += `▸ 🔄 Minted: *${formatNumber(emData.emission)}* | Upgraded: *${formatNumber(emData.upgraded)}* (${upgradePct}%)\n`;
+        }
     }
     report += `\n`;
 
@@ -1593,6 +1620,92 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
     }
 
     report += `\n`;
+
+    // ═══ 🏦 MULTI-MARKET FLOORS (Gift-Asset) ═══
+    if (giftAssetData && giftAssetData.providers) {
+        const providers = giftAssetData.providers;
+        const providerNames = Object.keys(providers);
+        if (providerNames.length > 0) {
+            report += `――――― 🏦 *MULTI\-MARKET FLOORS* ―――――\n`;
+            report += `_Cross\-marketplace price intelligence:_\n`;
+
+            if (giftAssetData.market_floor) {
+                const mf = giftAssetData.market_floor;
+                report += `▸ 📊 Aggregated: *${formatNumber(Math.round(mf.min))}* — *${formatNumber(Math.round(mf.max))} TON* (avg: ${formatNumber(Math.round(mf.avg))})\n`;
+            }
+
+            for (const pName of providerNames) {
+                const p = providers[pName];
+                const pEmoji = pName === 'getgems' ? '💎' : pName === 'portals' ? '🌀' : pName === 'tonnel' ? '🔷' : '🏪';
+                const pLabel = pName.charAt(0).toUpperCase() + pName.slice(1);
+                let line = `▸ ${pEmoji} *${pLabel}:*`;
+                if (p.collection_floor) line += ` Floor: *${formatNumber(Math.round(p.collection_floor))} TON*`;
+                if (p.model_floor) line += ` | Model: *${formatNumber(Math.round(p.model_floor))} TON*`;
+                report += line + `\n`;
+            }
+            report += `\n`;
+
+            // ═══ 📈 24H & ALL-TIME SALES ═══
+            report += `――――― 📈 *SALES ANALYTICS* ―――――\n`;
+            for (const pName of providerNames) {
+                const p = providers[pName];
+                if (p.sales_stat) {
+                    const s = p.sales_stat;
+                    const pEmoji = pName === 'getgems' ? '💎' : pName === 'portals' ? '🌀' : pName === 'tonnel' ? '🔷' : '🏪';
+                    const pLabel = pName.charAt(0).toUpperCase() + pName.slice(1);
+                    report += `▸ ${pEmoji} *${pLabel}:* 24h: *${s.sales_24h}* (${formatNumber(Math.round(s.sales_24h_value))} TON) | All: *${formatNumber(s.sales_all)}* (${formatNumber(Math.round(s.sales_all_value))} TON)\n`;
+                }
+            }
+            report += `\n`;
+        }
+    }
+
+    // ═══ 🧬 RARITY INDEX (Gift-Asset) ═══
+    if (giftAssetData && giftAssetData.rarity_index) {
+        const ri = giftAssetData.rarity_index;
+        let riLabel = 'Common';
+        let riEmoji = '⚪';
+        if (ri <= 0.00005) { riLabel = 'Mythical'; riEmoji = '🏆'; }
+        else if (ri <= 0.0001) { riLabel = 'Legendary'; riEmoji = '🦄'; }
+        else if (ri <= 0.0005) { riLabel = 'Ultra Rare'; riEmoji = '💎'; }
+        else if (ri <= 0.001) { riLabel = 'Very Rare'; riEmoji = '🌟'; }
+        else if (ri <= 0.005) { riLabel = 'Rare'; riEmoji = '✨'; }
+        else if (ri <= 0.01) { riLabel = 'Uncommon'; riEmoji = '🔷'; }
+        report += `――――― 🧬 *RARITY INDEX* ―――――\n`;
+        report += `▸ ${riEmoji} *${riLabel}* — Index: \`${ri}\`\n`;
+        report += `▸ 📦 Network Supply: *${formatNumber(giftAssetData.total_amount || 0)}* total\n`;
+        if (giftAssetData.mint_date) report += `▸ 📅 Minted: *${new Date(giftAssetData.mint_date * 1000).toLocaleDateString()}*\n`;
+        report += `\n`;
+    }
+
+    // ═══ 💸 MARKET CAP INTELLIGENCE ═══
+    if (giftAssetCap && collection.name && giftAssetCap[collection.name]) {
+        const capData = giftAssetCap[collection.name];
+        report += `――――― 💸 *MARKET CAP INTELLIGENCE* ―――――\n`;
+        if (capData.market_cap) {
+            report += `▸ 📊 Total Cap: *${formatNumber(Math.round(capData.market_cap))} TON*\n`;
+        }
+        if (capData.providers) {
+            for (const [pName, pCap] of Object.entries(capData.providers)) {
+                if (pCap > 0) {
+                    const pEmoji = pName === 'getgems' ? '💎' : pName === 'portals' ? '🌀' : '🏪';
+                    report += `▸ ${pEmoji} ${pName.charAt(0).toUpperCase() + pName.slice(1)}: *${formatNumber(Math.round(pCap))} TON*\n`;
+                }
+            }
+        }
+        report += `\n`;
+    }
+
+    // ═══ 🛍️ COLLECTION OFFERS (Buy Wall) ═══
+    if (collectionOffers && collectionOffers.offers && collectionOffers.offers.length > 0) {
+        report += `――――― 🛍️ *BEST BUY OFFERS* ―――――\n`;
+        const topOffers = collectionOffers.offers.slice(0, 3);
+        topOffers.forEach(offer => {
+            const pLabel = offer.provider ? offer.provider.charAt(0).toUpperCase() + offer.provider.slice(1) : 'Market';
+            report += `▸ 💰 *${formatNumber(Math.round(offer.price))} TON* on ${pLabel}\n`;
+        });
+        report += `\n`;
+    }
 
     // ═══ 🎨 ATTRIBUTES & RARITY ═══
     report += `――――― 🎨 *ATTRIBUTES & RARITY* ―――――\n\n`;

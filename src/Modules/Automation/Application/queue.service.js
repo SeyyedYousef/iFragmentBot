@@ -43,6 +43,8 @@ const HEAVY_JOB_TYPES = new Set([
     JOB_TYPES.GIFT_CARD,
     JOB_TYPES.FLEX_CARD,
     JOB_TYPES.COMPARISON, // Uses Puppeteer to scrape usernames
+    JOB_TYPES.PORTFOLIO,  // Now generates Wallet Cards using Puppeteer
+    JOB_TYPES.WALLET_CHECK
 ]);
 
 // ==================== PRIORITY LEVELS ====================

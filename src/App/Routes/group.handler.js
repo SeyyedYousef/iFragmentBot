@@ -14,7 +14,7 @@ import { generateFlexCard } from '../../Shared/UI/Components/card-generator.comp
 import { generateFlexCard as generateGiftFlexCard } from '../../Modules/Admin/Application/flex-card.service.js';
 import { getOwnerWalletByUsername } from '../../Modules/Market/Application/portfolio.service.js';
 import { generateWalletReport } from '../../Modules/Monitoring/Application/wallet-tracker.service.js';
-import { useFeature, isPremium, formatCreditsMessage, formatNoCreditsMessage } from '../../Modules/User/Application/user.service.js';
+import { useFeature, formatCreditsMessage, formatNoCreditsMessage } from '../../Modules/User/Application/user.service.js';
 import { Markup } from 'telegraf';
 import { jobQueue, JOB_TYPES, formatQueueMessage, PRIORITIES } from '../../Modules/Automation/Application/queue.service.js';
 
@@ -103,6 +103,7 @@ export function buildGiftCardData(result) {
  */
 export async function handleGroupCommand(ctx, input, handleComparison, getTelegramClient) {
     const userId = ctx.from.id;
+    console.log(`🛠️ [GroupHandler] Processing: "${input}" (User: ${userId}, Chat: ${ctx.chat.id})`);
     const parts = input.trim().split(/\s+/);
     const command = parts[0].toLowerCase();
     const args = parts.slice(1);
@@ -138,7 +139,7 @@ export async function handleGroupCommand(ctx, input, handleComparison, getTelegr
             try {
                 // Delegate to Job Queue to prevent memory leaks and handle concurrency
                 const tonPrice = tonPriceCache.get('price') || 5.5; // Optimistic price fetch
-                const isPremiumUser = await isPremium(userId);
+                const isPremiumUser = false; // Legacy premium removed
 
                 const jobData = {
                     link,
@@ -148,24 +149,24 @@ export async function handleGroupCommand(ctx, input, handleComparison, getTelegr
                 const position = jobQueue.getPosition(null); // Approximate
                 const estimatedWait = jobQueue.getEstimatedWait(null);
 
+                let statusMsg;
+                if (estimatedWait > 5) {
+                    statusMsg = await ctx.reply(formatQueueMessage(position + 1, estimatedWait, false), {
+                        parse_mode: 'Markdown',
+                        reply_to_message_id: ctx.message.message_id
+                    });
+                } else {
+                    statusMsg = await ctx.reply('🔮 Analyzing gift...', { reply_to_message_id: ctx.message.message_id });
+                }
+
                 await jobQueue.add({
                     type: JOB_TYPES.GIFT_REPORT,
                     userId,
                     chatId: ctx.chat.id,
                     data: jobData,
-                    priority: isPremiumUser ? PRIORITIES.PREMIUM : PRIORITIES.NORMAL,
-                    messageId: ctx.message.message_id // Optional: reply to original
+                    priority: PRIORITIES.NORMAL,
+                    messageId: statusMsg.message_id
                 });
-
-                // Reply with queuing status if queue is busy
-                if (estimatedWait > 5) {
-                    await ctx.reply(formatQueueMessage(position + 1, estimatedWait, isPremiumUser), {
-                        parse_mode: 'Markdown',
-                        reply_to_message_id: ctx.message.message_id
-                    });
-                } else {
-                    await ctx.reply('🔮 Analyzing gift...', { reply_to_message_id: ctx.message.message_id });
-                }
 
             } catch (error) {
                 await ctx.reply(`❌ ${error.message}`, { reply_to_message_id: ctx.message.message_id });
@@ -188,7 +189,7 @@ export async function handleGroupCommand(ctx, input, handleComparison, getTelegr
             try {
                 // Delegate to Job Queue
                 const tonPrice = tonPriceCache.get('price') || 5.5;
-                const isPremiumUser = await isPremium(userId);
+                const isPremiumUser = false;
 
                 const jobData = {
                     username,
@@ -197,23 +198,24 @@ export async function handleGroupCommand(ctx, input, handleComparison, getTelegr
 
                 const estimatedWait = jobQueue.getEstimatedWait(null);
 
+                let statusMsg;
+                if (estimatedWait > 5) {
+                    statusMsg = await ctx.reply(formatQueueMessage(jobQueue.getPosition(null) + 1, estimatedWait, false), {
+                        parse_mode: 'Markdown',
+                        reply_to_message_id: ctx.message.message_id
+                    });
+                } else {
+                    statusMsg = await ctx.reply(`🔍 Analyzing @${username}...`, { reply_to_message_id: ctx.message.message_id });
+                }
+
                 await jobQueue.add({
                     type: JOB_TYPES.USERNAME_REPORT,
                     userId,
                     chatId: ctx.chat.id,
                     data: jobData,
-                    priority: isPremiumUser ? PRIORITIES.PREMIUM : PRIORITIES.NORMAL,
-                    messageId: ctx.message.message_id
+                    priority: PRIORITIES.NORMAL,
+                    messageId: statusMsg.message_id
                 });
-
-                if (estimatedWait > 5) {
-                    await ctx.reply(formatQueueMessage(jobQueue.getPosition(null) + 1, estimatedWait, isPremiumUser), {
-                        parse_mode: 'Markdown',
-                        reply_to_message_id: ctx.message.message_id
-                    });
-                } else {
-                    await ctx.reply(`🔍 Analyzing @${username}...`, { reply_to_message_id: ctx.message.message_id });
-                }
 
             } catch (error) {
                 await ctx.reply(`❌ ${error.message}`, { reply_to_message_id: ctx.message.message_id });
@@ -236,7 +238,7 @@ export async function handleGroupCommand(ctx, input, handleComparison, getTelegr
             }
 
             try {
-                const isPremiumUser = await isPremium(userId);
+                const isPremiumUser = false;
                 const jobData = { user1: u1, user2: u2 };
 
                 const estimatedWait = jobQueue.getEstimatedWait(null);
@@ -246,11 +248,11 @@ export async function handleGroupCommand(ctx, input, handleComparison, getTelegr
                     userId,
                     chatId: ctx.chat.id,
                     data: jobData,
-                    priority: isPremiumUser ? PRIORITIES.PREMIUM : PRIORITIES.NORMAL
+                    priority: PRIORITIES.NORMAL
                 });
 
                 if (estimatedWait > 5) {
-                    await ctx.reply(formatQueueMessage(jobQueue.getPosition(null) + 1, estimatedWait, isPremiumUser), {
+                    await ctx.reply(formatQueueMessage(jobQueue.getPosition(null) + 1, estimatedWait, false), {
                         parse_mode: 'Markdown',
                         reply_to_message_id: ctx.message.message_id
                     });
@@ -307,8 +309,7 @@ export async function handleGroupCommand(ctx, input, handleComparison, getTelegr
             }
 
             try {
-                const isPremiumUser = await isPremium(userId);
-
+                const isPremiumUser = false;
                 const estimatedWait = jobQueue.getEstimatedWait(null);
 
                 await jobQueue.add({
@@ -316,11 +317,11 @@ export async function handleGroupCommand(ctx, input, handleComparison, getTelegr
                     userId,
                     chatId: ctx.chat.id,
                     data: { walletAddress: target },
-                    priority: isPremiumUser ? PRIORITIES.PREMIUM : PRIORITIES.NORMAL
+                    priority: PRIORITIES.NORMAL
                 });
 
                 if (estimatedWait > 5) {
-                    await ctx.reply(formatQueueMessage(jobQueue.getPosition(null) + 1, estimatedWait, isPremiumUser), {
+                    await ctx.reply(formatQueueMessage(jobQueue.getPosition(null) + 1, estimatedWait, false), {
                         parse_mode: 'Markdown',
                         reply_to_message_id: ctx.message.message_id
                     });
@@ -450,18 +451,8 @@ export async function handlePortfolioByWallet(ctx, walletAddress) {
         await generateWalletReport(ctx, walletAddress);
 
         const creditResult = useFeature(ctx.from.id, 'portfolio');
-        const creditsMsg = formatCreditsMessage(creditResult.remaining, creditResult.isPremium);
-        if (ctx.chat.type === 'private') {
-            if (!creditResult.isPremium) {
-                await ctx.replyWithMarkdown(creditsMsg, Markup.inlineKeyboard([
-                    [Markup.button.callback('💎 Buy Premium', 'buy_premium')]
-                ]));
-            } else {
-                await ctx.replyWithMarkdown(creditsMsg);
-            }
-        } else {
-            await ctx.replyWithMarkdown(creditsMsg);
-        }
+        const creditsMsg = formatCreditsMessage(creditResult.remaining);
+        await ctx.replyWithMarkdown(creditsMsg);
 
     } catch (error) {
         console.error('Portfolio error:', error);
@@ -499,18 +490,8 @@ export async function handlePortfolioByUsername(ctx, username) {
         await generateWalletReport(ctx, ownerWallet);
 
         const creditResult = useFeature(ctx.from.id, 'portfolio');
-        const creditsMsg = formatCreditsMessage(creditResult.remaining, creditResult.isPremium);
-        if (ctx.chat.type === 'private') {
-            if (!creditResult.isPremium) {
-                await ctx.replyWithMarkdown(creditsMsg, Markup.inlineKeyboard([
-                    [Markup.button.callback('💎 Buy Premium', 'buy_premium')]
-                ]));
-            } else {
-                await ctx.replyWithMarkdown(creditsMsg);
-            }
-        } else {
-            await ctx.replyWithMarkdown(creditsMsg);
-        }
+        const creditsMsg = formatCreditsMessage(creditResult.remaining);
+        await ctx.replyWithMarkdown(creditsMsg);
 
     } catch (error) {
         console.error('Portfolio by username error:', error);
