@@ -229,6 +229,29 @@ export function getPerfectFor(username) {
     return '🌐 General Use';
 }
 
+function safeNum(n, fallback = null) {
+    const x = typeof n === 'string' ? parseFloat(n) : n;
+    return Number.isFinite(x) ? x : fallback;
+}
+
+function formatPct(p, digits = 0) {
+    if (!Number.isFinite(p)) return '—';
+    const sign = p > 0 ? '+' : '';
+    return `${sign}${p.toFixed(digits)}%`;
+}
+
+function clamp(n, min, max) {
+    return Math.max(min, Math.min(max, n));
+}
+
+function getConfidenceLabel(score) {
+    if (score >= 90) return '🎯 Certain';
+    if (score >= 75) return '✅ High';
+    if (score >= 55) return '📊 Good';
+    if (score >= 35) return '⚡ Fair';
+    return '⚠️ Low';
+}
+
 /**
  * Calculate Liquidity Score (0-100) based on username characteristics
  */
@@ -315,18 +338,94 @@ export function buildFullCaption(data, cardData, tonPrice, rarity, estValue, sug
     const tier = rarity.tier || 'Unknown';
     const confidence = estValue.confidence || 70;
 
+    // ---- Market data normalization (from Fragment scrape) ----
+    const listingTon = safeNum(data.priceTon, null);
+    const highestBidTon = safeNum(data.highestBid, null);
+    const minBidTon = safeNum(data.minBid, null);
+
+    const marketPriceTon =
+        Number.isFinite(listingTon) ? listingTon :
+            Number.isFinite(highestBidTon) ? highestBidTon :
+                Number.isFinite(minBidTon) ? minBidTon : null;
+
+    // ---- Policy floor: Telegram 4-char minimum 5050 TON ----
+    const POLICY_FLOOR_4L = 5050;
+
+    // ---- Comparable baseline (if AI oracle provided) ----
+    const baselineMedian = safeNum(estValue.aiScores?.similar_median, null); // optional if AI provides it
+    const baselineAvg = safeNum(estValue.aiScores?.similar_avg, null);
+    const baseline = Number.isFinite(baselineMedian) ? baselineMedian : (Number.isFinite(baselineAvg) ? baselineAvg : null);
+
+    // ---- Gaps ----
+    const gapVsMarket = (Number.isFinite(marketPriceTon) && marketPriceTon > 0)
+        ? ((estValue.ton / marketPriceTon) - 1) * 100
+        : null;
+    const gapVsBaseline = (Number.isFinite(baseline) && baseline > 0)
+        ? ((estValue.ton / baseline) - 1) * 100
+        : null;
+
+    // ---- Data quality score (simple, deterministic) ----
+    // (No "historical 7/30/90d" section anymore as requested)
+    let dq = 40;
+    if (Number.isFinite(marketPriceTon)) dq += 20;
+    if (data.lastSalePrice) dq += 20;
+    if (baseline) dq += 10;
+    if (estValue.isAi) dq += 10;
+    dq = clamp(dq, 0, 100);
+    const dqLevel = dq >= 85 ? 'EXCELLENT' : dq >= 70 ? 'GOOD' : dq >= 50 ? 'FAIR' : 'LOW';
+
+    // ---- Liquidity & risk ----
+    const liquidity = calculateLiquidityScore(rawUsername, tier, estValue);
+    const risk = calculateRiskScore(rawUsername, estValue);
+
     // 💎 HEADER
     let msg = `💎 *${escapeMD(username)}*\n`;
     msg += `_${escapeMD(definition)}_\n\n`;
 
-    // 💰 VALUATION
-    msg += `💵 *ESTIMATED VALUE*\n`;
-    msg += `💎 *${valTon} TON* (~$${valUsd})\n`;
-    msg += `${rarity.stars || '⭐'} *${escapeMD(tier)}* • ${escapeMD(rarity.label || 'Asset')}\n`;
-    msg += `📊 Conf: \`${drawBar(confidence)}\` ${confidence}%\n\n`;
+    // 💰 FAIR VALUE (EST.)
+    msg += `――――― 💰 *FAIR VALUE (EST.)* ―――――\n`;
+    msg += `▸ 🏷️  *${valTon} TON*  (~$${valUsd})\n`;
+    msg += `▸ ${rarity.stars || '⭐'} *${escapeMD(tier)}* • ${escapeMD(rarity.label || 'Asset')}\n`;
+    msg += `▸ 🎯 Confidence: *${getConfidenceLabel(confidence)}* (${confidence}%)\n`;
+    msg += `▸ 🧾 Data Quality: *${dqLevel}* (${dq}/100)\n`;
+
+    // Policy floor line (explicit)
+    if (rawUsername.length === 4) {
+        msg += `▸ 📌 Hard Floor (Telegram): *${formatNum(POLICY_FLOOR_4L)} TON*\n`;
+    }
+
+    if (Number.isFinite(gapVsMarket)) {
+        msg += `▸ 📊 Gap vs Listing: *${formatPct(gapVsMarket)}*\n`;
+    }
+    if (Number.isFinite(gapVsBaseline)) {
+        msg += `▸ 📊 Gap vs Comparable Baseline: *${formatPct(gapVsBaseline)}*\n`;
+    }
+    msg += `\n`;
+
+    // 📊 MARKET SNAPSHOT
+    msg += `――――― 📊 *MARKET SNAPSHOT* ―――――\n`;
+    msg += `▸ Status: ${statusIcons[data.status] || '⚪ Unknown'}\n`;
+    if (Number.isFinite(listingTon)) msg += `▸ Listing: *${formatNum(listingTon)} TON* (Buy Now)\n`;
+    else if (Number.isFinite(highestBidTon) || Number.isFinite(minBidTon)) {
+        if (Number.isFinite(highestBidTon)) msg += `▸ Highest Bid: *${formatNum(highestBidTon)} TON*\n`;
+        if (Number.isFinite(minBidTon)) msg += `▸ Min Bid: *${formatNum(minBidTon)} TON*\n`;
+    }
+    if (data.lastSalePrice) msg += `▸ Last Sale: *${formatNum(data.lastSalePrice)} TON*\n`;
+    msg += `▸ Fragment: ${escapeMD(data.url || `https://fragment.com/username/${rawUsername}`)}\n`;
+    if (data.ownerWallet) msg += `▸ Owner: \`${data.ownerWallet.slice(0, 4)}...${data.ownerWallet.slice(-4)}\`\n`;
+    msg += `\n`;
+
+    // 🔍 MARKET POSITION
+    msg += `――――― 🔍 *MARKET POSITION* ―――――\n`;
+    const segment = getPerfectFor(rawUsername); // coarse but deterministic
+    msg += `▸ Segment: *${escapeMD(segment)}*\n`;
+    msg += `▸ Liquidity: *${liquidity}/100* (${escapeMD(getScoreLabel(liquidity, 'speed'))})  •  Risk: *${risk}/100* (${escapeMD(getScoreLabel(risk, 'risk'))})\n`;
+    if (estValue.aiScores?.moat) msg += `▸ Moat: *${formatNum(estValue.aiScores.moat)}*/100\n`;
+    if (estValue.aiTrend) msg += `▸ Momentum: *${escapeMD(estValue.aiTrend)}*\n`;
+    msg += `\n`;
 
     // 🧬 LINGUISTIC DNA
-    msg += `🧬 *LINGUISTIC DNA*\n`;
+    msg += `――――― 🧬 *LINGUISTIC & BRANDABILITY* ―――――\n`;
 
     if (estValue.linguistics) {
         const pron = estValue.linguistics.pronunciation;
@@ -362,71 +461,76 @@ export function buildFullCaption(data, cardData, tonPrice, rarity, estValue, sug
     msg += `\n`;
 
     // 🎯 STRATEGIC UTILITY
-    if (estValue.aura) {
-        msg += `🎯 *STRATEGIC UTILITY*\n`;
-        if (estValue.aura.archetype) msg += `🏰 Archetype: *${escapeMD(estValue.aura.archetype)}*\n`;
-
-        // Perfect For
-        if (estValue.best_for && estValue.best_for.length > 0) {
-            const bestFor = estValue.best_for.slice(0, 3).map(escapeMD).join(' | ');
-            msg += `🚀 Perfect For: ${bestFor}\n`;
-        }
-        msg += `\n`;
-    }
-
-    // 🏛 DETAILS (Restored)
-    msg += `🏛 *DETAILS*\n`;
-    msg += `▪️ Status: ${statusIcons[data.status] || '⚪ Unknown'}\n`;
-    if (data.lastSalePrice) msg += `▪️ Last Sale: ${lastSale}\n`;
-    if (data.ownerWallet) {
-        msg += `▪️ Owner: \`${data.ownerWallet.slice(0, 4)}...${data.ownerWallet.slice(-4)}\`\n`;
+    msg += `――――― 🎯 *STRATEGIC UTILITY* ―――――\n`;
+    if (estValue.aura?.archetype) msg += `▸ Archetype: *${escapeMD(estValue.aura.archetype)}*\n`;
+    if (estValue.best_for && estValue.best_for.length > 0) {
+        msg += `▸ Perfect For:\n`;
+        estValue.best_for.slice(0, 6).forEach(b => {
+            msg += `   • ${escapeMD(b)}\n`;
+        });
+    } else {
+        msg += `▸ Perfect For: ${escapeMD(getPerfectFor(rawUsername))}\n`;
     }
     msg += `\n`;
 
     // 🔬 ANALYSIS (Restored/Fixed)
     const lingType = estValue.linguistics?.type || analyzeWordType(rawUsername);
-    msg += `🔬 *ANALYSIS*\n`;
-    msg += `• Class: *${escapeMD(lingType)}*\n`;
+    msg += `――――― 🔬 *ORACLE ANALYSIS* ―――――\n`;
+    msg += `▸ Class: *${escapeMD(lingType)}*\n`;
 
     if (estValue.aiReasoning) {
         let reasoning = estValue.aiReasoning;
         // Smart truncation: try to end at a sentence boundary
-        if (reasoning.length > 140) {
-            const sentenceEnd = reasoning.substring(0, 160).search(/[.!]\s/);
-            if (sentenceEnd > 30 && sentenceEnd < 160) {
-                reasoning = reasoning.substring(0, sentenceEnd + 1);
-            } else {
-                reasoning = reasoning.substring(0, 137) + '...';
-            }
-        }
+        // Keep it verbose (no short version), but still safe for Telegram length:
+        if (reasoning.length > 500) reasoning = reasoning.substring(0, 497) + '...';
         reasoning = escapeMD(reasoning);
-        msg += `• Oracle: _"${reasoning}"_\n`;
+        msg += `▸ AI Verdict:\n_${reasoning}_\n`;
     }
     msg += `\n`;
 
     // 🔮 VIBE CHECK
     if (estValue.aura && estValue.aura.vibe) {
-        msg += `🔮 *VIBE CHECK*\n`;
+        msg += `――――― 🔮 *VIBE CHECK* ―――――\n`;
         msg += `_${escapeMD(estValue.aura.vibe)}_\n\n`;
     }
 
-    // 🧪 SIMILARS
+    // 💧 LIQUIDITY & RISK PROFILE
+    msg += `――――― 💧 *LIQUIDITY & RISK PROFILE* ―――――\n`;
+    msg += `▸ Liquidity Score: *${liquidity}/100* → \`${drawBar(liquidity)}\`\n`;
+    msg += `▸ Risk Score: *${risk}/100* → \`${drawBar(risk)}\`\n`;
+    msg += `\n`;
+
+    // 🧪 COMPARABLES
     const similarSources = estValue.similar || estValue.factors || [];
     const allSimilar = (Array.isArray(similarSources) ? similarSources : [similarSources])
         .filter(f => f && typeof f === 'string' && f.startsWith('@'))
-        .slice(0, 3);
+        .slice(0, 6);
 
     if (allSimilar.length > 0) {
-        msg += `🧪 *SIMILARS*\n`;
+        msg += `――――― 📊 *COMPARABLES* ―――――\n`;
         allSimilar.forEach(f => msg += `▸ ${escapeMD(f)}\n`);
+        msg += `\n`;
     } else if (estValue.factors && estValue.factors.length > 0) {
-        msg += `🧪 *SIMILARS*\n`;
+        msg += `――――― 📊 *COMPARABLES* ―――――\n`;
         msg += `▸ ${escapeMD(data.username)}\\_bot\n`;
         msg += `▸ ${escapeMD(data.username)}x\n`;
+        msg += `\n`;
     }
 
+    // 🧠 INVESTMENT SIGNAL
+    msg += `━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    let signal = 'HOLD';
+    if (Number.isFinite(gapVsMarket) && gapVsMarket < -10 && confidence >= 60) signal = 'BUY';
+    if (Number.isFinite(gapVsMarket) && gapVsMarket > 25 && confidence >= 60) signal = 'TAKE PROFIT';
+    msg += `MARKET SIGNAL: **${signal}**\n`;
+    if (Number.isFinite(gapVsMarket)) {
+        msg += `_${gapVsMarket < 0 ? 'Undervalued' : 'Overvalued'} by ~${Math.abs(Math.round(gapVsMarket))}% vs current listing with ${confidence}% confidence._\n`;
+    }
+    msg += `━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+
     // ⚡ FOOTER
-    msg += `\n_Powered by @iFragmentBot_`;
+    msg += `\n⚡ Generated by @iFragmentBot\n`;
+    msg += `💹 TON: $${safeNum(tonPrice, 0)?.toFixed ? tonPrice.toFixed(2) : tonPrice}`;
 
     return msg;
 }
