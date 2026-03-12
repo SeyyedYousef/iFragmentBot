@@ -253,30 +253,24 @@ export async function handleViewUsernames(ctx) {
     const cached = paginationCache.get(`${ctx.chat.id}`);
     if (!cached) return ctx.answerCbQuery('⚠️ Session expired.');
 
-    const msg = formatUsernamesPage(cached.portfolio.usernames, cached.usernameStatuses, 0);
-    const keyboard = getUsernamesKeyboard(cached.portfolio.usernames.length, 0);
-
-    return smartEdit(ctx, msg.text, keyboard);
+    const { text, keyboard } = formatUsernamesPage(cached.portfolio.usernames, cached.usernameStatuses, 0);
+    return smartEdit(ctx, text, keyboard);
 }
 
 export async function handleViewNumbers(ctx) {
     const cached = paginationCache.get(`${ctx.chat.id}`);
     if (!cached) return ctx.answerCbQuery('⚠️ Session expired.');
 
-    const msg = formatNumbersPage(cached.portfolio.anonymousNumbers, cached.numberStatuses, 0);
-    const keyboard = getNumbersKeyboard(cached.portfolio.anonymousNumbers.length, 0);
-
-    return smartEdit(ctx, msg.text, keyboard);
+    const { text, keyboard } = formatNumbersPage(cached.portfolio.anonymousNumbers, cached.numberStatuses, 0);
+    return smartEdit(ctx, text, keyboard);
 }
 
 export async function handleViewGifts(ctx) {
     const cached = paginationCache.get(`${ctx.chat.id}`);
     if (!cached) return ctx.answerCbQuery('⚠️ Session expired.');
 
-    const msg = formatGiftsPage(cached.portfolio.gifts, 0);
-    const keyboard = getGiftsKeyboard(cached.portfolio.gifts.length, 0);
-
-    return smartEdit(ctx, msg.text, keyboard);
+    const { text, keyboard } = formatGiftsPage(cached.portfolio.gifts, 0);
+    return smartEdit(ctx, text, keyboard);
 }
 
 export async function handleOverviewBack(ctx) {
@@ -390,7 +384,8 @@ function formatUsernamesPage(usernames, statuses, page) {
 
     text += `\n\n_✅ = Active | 💤 = Not in use_`;
 
-    return { text };
+    const keyboard = getUsernamesKeyboard(total, page);
+    return { text, keyboard };
 }
 
 function formatNumbersPage(numbers, statuses, page) {
@@ -420,7 +415,8 @@ function formatNumbersPage(numbers, statuses, page) {
 
     text += `\n\n_🟢 = Registered | ⚫ = Not Active_`;
 
-    return { text };
+    const keyboard = getNumbersKeyboard(total, page);
+    return { text, keyboard };
 }
 
 function formatGiftsPage(gifts, page) {
@@ -582,7 +578,6 @@ export async function handleUsernamePagination(ctx, page) {
     const start = page * ITEMS_PER_PAGE;
     const end = Math.min(start + ITEMS_PER_PAGE, portfolio.usernames.length);
 
-    // Filter which items on this page need checking
     const needsChecking = [];
     for (let i = start; i < end; i++) {
         if (!usernameStatuses[i]) {
@@ -591,10 +586,7 @@ export async function handleUsernamePagination(ctx, page) {
     }
 
     if (needsChecking.length > 0) {
-        // Inform user we are checking...
-        await ctx.answerCbQuery('⏳ Checking status of usernames on this page...');
-
-        // Check them one by one (executeWithSmartRetry handles rotation)
+        await ctx.answerCbQuery('⏳ Checking status...');
         for (const index of needsChecking) {
             try {
                 const check = await telegramClient.checkUsername(portfolio.usernames[index].name);
@@ -603,15 +595,12 @@ export async function handleUsernamePagination(ctx, page) {
                 usernameStatuses[index] = ' ❓';
             }
         }
-
         cached.usernameStatuses = usernameStatuses;
         paginationCache.set(cacheKey, cached);
     }
 
-    const msg = formatUsernamesPage(portfolio.usernames, usernameStatuses, page);
-    const keyboard = getUsernamesKeyboard(portfolio.usernames.length, page);
-
-    return smartEdit(ctx, msg.text, keyboard);
+    const { text, keyboard } = formatUsernamesPage(portfolio.usernames, usernameStatuses, page);
+    return smartEdit(ctx, text, keyboard);
 }
 
 export async function handleNumberPagination(ctx, page) {
@@ -655,10 +644,8 @@ export async function handleNumberPagination(ctx, page) {
         paginationCache.set(cacheKey, cached);
     }
 
-    const msg = formatNumbersPage(portfolio.anonymousNumbers, numberStatuses, page);
-    const keyboard = getNumbersKeyboard(portfolio.anonymousNumbers.length, page);
-
-    return smartEdit(ctx, msg.text, keyboard);
+    const { text, keyboard } = formatNumbersPage(portfolio.anonymousNumbers, numberStatuses, page);
+    return smartEdit(ctx, text, keyboard);
 }
 
 export function handleGiftPagination(ctx, page) {
@@ -671,10 +658,9 @@ export function handleGiftPagination(ctx, page) {
 
     const { portfolio } = cached;
     const gifts = portfolio.gifts || [];
-    const msg = formatGiftsPage(gifts, page);
-    const keyboard = getGiftsKeyboard(gifts.length, page);
+    const { text, keyboard } = formatGiftsPage(gifts, page);
 
-    return smartEdit(ctx, msg.text, keyboard);
+    return smartEdit(ctx, text, keyboard);
 }
 
 // ======================================================

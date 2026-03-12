@@ -386,6 +386,7 @@ async function getGiftInfo(collectionSlug, itemNumber) {
  * @returns {object} - { success, totalValue, giftCount, gifts }
  */
 async function getUserGiftsWithValue(userId) {
+    await loadGramJS(); // Ensure GramJS is loaded
     console.log(`🎁 Fetching gifts for user: ${userId}`);
 
     try {
@@ -409,8 +410,9 @@ async function getUserGiftsWithValue(userId) {
             do {
                 console.log(`🎁 Fetching gifts chunk ${loopCount + 1}... (Offset: ${offset || 'Start'})`);
 
+                // Correct GramJS way: Api.payments.GetUserStarGifts
                 const result = await client.invoke(
-                    new Api.functions.payments.GetUserStarGifts({
+                    new Api.payments.GetUserStarGifts({
                         userId: userEntity,
                         offset: offset,
                         limit: 100

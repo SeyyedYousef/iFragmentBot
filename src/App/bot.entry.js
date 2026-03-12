@@ -109,7 +109,9 @@ process.on('beforeExit', (code) => {
 
 import { spamProtection } from '../Modules/Security/Application/spam-protection.service.js';
 
-const bot = new Telegraf(BOT_TOKEN);
+const bot = new Telegraf(BOT_TOKEN, {
+    handlerTimeout: 120_000 // 2 minutes for heavy operations
+});
 
 // ==================== GLOBAL BOT ERROR HANDLER ====================
 // This catches ALL unhandled errors in any middleware/handler
@@ -709,16 +711,7 @@ async function initAndLaunch() {
         await handleMeCommand(ctx);
     });
 
-    // ==================== WALLET TRACKER HANDLERS (New) ====================
-    bot.action(/^view_usernames:(.+)$/, async (ctx) => {
-        const { handleViewUsernames } = await import('../Modules/Monitoring/Application/wallet-tracker.service.js');
-        await handleViewUsernames(ctx, ctx.match[1]);
-    });
-
-    bot.action(/^view_numbers:(.+)$/, async (ctx) => {
-        const { handleViewNumbers } = await import('../Modules/Monitoring/Application/wallet-tracker.service.js');
-        await handleViewNumbers(ctx, ctx.match[1]);
-    });
+    // ==================== WALLET TRACKER HANDLERS (Managed in menu.handler.js) ====================
 
     // ==================== DAILY SCHEDULER (Market Pulse at 9 AM Afghanistan) ====================
     dailyScheduler.setBot(bot);
@@ -733,7 +726,7 @@ async function initAndLaunch() {
 
             console.log('🚀 [Bot] Clearing webhooks...');
             await bot.telegram.deleteWebhook();
-            
+            await new Promise(r => setTimeout(r, 2000)); // Delay to prevent 409/duplicate processing
             console.log('🚀 [Bot] Starting polling loop...');
             bot.launch({
                 polling: {

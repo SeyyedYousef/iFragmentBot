@@ -37,7 +37,8 @@ function findLinuxChrome() {
     const cacheDir = process.env.PUPPETEER_CACHE_DIR || '/opt/render/project/src/.cache';
     const chromeDirs = [
         join(cacheDir, 'chrome'),
-        '/opt/render/project/src/.cache/chrome',
+        '/opt/render/project/src/node_modules/.cache/puppeteer/chrome',
+        'node_modules/.cache/puppeteer/chrome',
         '.cache/chrome'
     ];
 
