@@ -383,3 +383,37 @@ export async function deleteGiftAssetToken(token) {
         return false;
     }
 }
+/**
+ * Save See.tg API token to MongoDB
+ */
+export async function saveSeeTgToken(token) {
+    if (!db) return false;
+    try {
+        await db.collection('settings').updateOne(
+            { key: 'seetg_token' },
+            { $set: { token, updatedAt: new Date() } },
+            { upsert: true }
+        );
+        return true;
+    } catch (error) {
+        console.error('Failed to save See.tg token:', error.message);
+        return false;
+    }
+}
+
+/**
+ * Load See.tg API token from MongoDB
+ */
+export async function loadSeeTgToken() {
+    if (!db) {
+        await connectDB();
+        if (!db) return null;
+    }
+    try {
+        const result = await db.collection('settings').findOne({ key: 'seetg_token' });
+        return result ? result.token : null;
+    } catch (error) {
+        console.error('Failed to load See.tg token:', error.message);
+        return null;
+    }
+}

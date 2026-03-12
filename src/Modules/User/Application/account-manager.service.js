@@ -334,7 +334,8 @@ async function connectClient(account) {
         const clientParams = {
             connectionRetries: 3,
             useWSS: false,
-            timeout: CONNECT_TIMEOUT_MS
+            timeout: CONNECT_TIMEOUT_MS,
+            receiveUpdates: false // Disable updates to prevent timeout noise
         };
 
         // Configure proxy if set

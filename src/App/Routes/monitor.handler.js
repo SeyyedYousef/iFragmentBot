@@ -32,8 +32,8 @@ export function registerMonitorHandlers(bot, isAdmin) {
 
             await ctx.telegram.deleteMessage(ctx.chat.id, statusMsg.message_id);
 
-            if (imageBuffer) {
-                await ctx.replyWithPhoto({ source: imageBuffer }, {
+            if (imageBuffer && imageBuffer.length > 0) {
+                await ctx.replyWithPhoto({ source: imageBuffer, filename: 'market_pulse.png' }, {
                     caption: reportText,
                     parse_mode: 'Markdown'
                 });

@@ -5,10 +5,25 @@
  */
 
 import fetch from 'node-fetch';
+import { loadSeeTgToken, saveSeeTgToken } from '../../Shared/Infra/Database/mongo.repository.js';
 
 // API Configuration
 const SEETG_API_BASE = 'https://poso.see.tg/api';
-const SEETG_API_TOKEN = process.env.SEETG_API_TOKEN || '';
+let cachedToken = process.env.SEETG_API_TOKEN || '';
+
+/**
+ * Initialize See.tg token from DB
+ */
+async function initToken() {
+    const dbToken = await loadSeeTgToken();
+    if (dbToken) {
+        cachedToken = dbToken;
+        console.log('📊 See.tg token loaded from MongoDB');
+    }
+}
+
+// Auto-init token
+initToken().catch(e => console.error('Failed to init See.tg token:', e));
 
 /**
  * Make authenticated API request to See.tg
@@ -17,18 +32,18 @@ async function apiRequest(endpoint, options = {}) {
     const url = `${SEETG_API_BASE}${endpoint}`;
 
     const headers = {
-        'Authorization': SEETG_API_TOKEN,
+        'Authorization': cachedToken,
         'Content-Type': 'application/json',
         ...options.headers
     };
 
-    if (!SEETG_API_TOKEN) {
+    if (!cachedToken) {
         // Silently fail if no token provided to avoid errors
         return null;
     }
 
     console.log(`🔗 See.tg API: ${url}`);
-    console.log(`🔑 Token present: Yes`);
+    console.log(`🔑 Token present: ${cachedToken ? 'Yes' : 'No'}`);
 
     try {
         const controller = new AbortController();
@@ -227,6 +242,18 @@ async function getMarketFloors(collectionSlug) {
     return data;
 }
 
+/**
+ * Update See.tg token
+ */
+async function updateToken(newToken) {
+    const saved = await saveSeeTgToken(newToken);
+    if (saved) {
+        cachedToken = newToken;
+        return true;
+    }
+    return false;
+}
+
 export {
     getGiftInfo,
     getOwnerInfo,
@@ -237,5 +264,7 @@ export {
     getTonRate,
     getAvatarUrl,
     getStats,
-    getMarketFloors
+    getMarketFloors,
+    updateToken,
+    initToken
 };

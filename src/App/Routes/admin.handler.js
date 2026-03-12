@@ -12,6 +12,7 @@ import { getAllCacheStats } from '../../Shared/Infra/Cache/cache.service.js';
 import { getGiftStats, get888Stats } from '../../Modules/Market/Application/market.service.js';
 import { generateNewsCard, generateNewsCard2, generateMarketCard } from '../../Shared/UI/Components/card-generator.component.js';
 import giftAssetAPI from '../../Modules/Market/Infrastructure/gift_asset.api.js';
+import * as seetgAPI from '../../Modules/Automation/Application/seetg.service.js';
 import {
     getStats,
     getAllUsers,
@@ -504,7 +505,6 @@ ${input}
         });
         return true;
     }
-
     // Handle Gift-Asset API token addition
     if (state.action === 'admin_add_ga_token' && isAdmin(ctx.from.id)) {
         userStates.delete(chatId);
@@ -522,6 +522,33 @@ ${input}
             });
         } else {
             await ctx.replyWithMarkdown(`❌ *Failed to add token.*\n\nEither the token is too short or it already exists.`, {
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '🔙 API Keys', callback_data: 'admin_api_keys' }]
+                    ]
+                }
+            });
+        }
+        return true;
+    }
+
+    // Handle See.tg API token update
+    if (state.action === 'admin_update_seetg' && isAdmin(ctx.from.id)) {
+        userStates.delete(chatId);
+
+        const token = input.trim();
+        const updated = await seetgAPI.updateToken(token);
+
+        if (updated) {
+            await ctx.replyWithMarkdown(`✅ *See.tg Token Updated!*\n\n📡 Token: \`${token.substring(0, 8)}...${token.slice(-4)}\`\n\n_New token is now active for all market requests._`, {
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '🔙 API Keys', callback_data: 'admin_api_keys' }]
+                    ]
+                }
+            });
+        } else {
+            await ctx.replyWithMarkdown(`❌ *Failed to update See.tg token.*`, {
                 reply_markup: {
                     inline_keyboard: [
                         [{ text: '🔙 API Keys', callback_data: 'admin_api_keys' }]

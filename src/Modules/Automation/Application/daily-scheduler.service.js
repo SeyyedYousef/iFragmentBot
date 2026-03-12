@@ -74,15 +74,17 @@ async function postDailyReport() {
         }
 
         // Post to channel
-        if (imageBuffer) {
+        if (imageBuffer && imageBuffer.length > 0) {
+            console.log(`📤 Daily Scheduler: Sending photo report to ${CHANNEL_ID} (${imageBuffer.length} bytes)...`);
             await botInstance.telegram.sendPhoto(CHANNEL_ID,
-                { source: imageBuffer },
+                { source: imageBuffer, filename: 'market_pulse.png' },
                 {
                     caption: reportText,
                     parse_mode: 'Markdown'
                 }
             );
         } else {
+            console.log(`📨 Daily Scheduler: Sending text-only report to ${CHANNEL_ID} (Image buffer empty or missing)`);
             await botInstance.telegram.sendMessage(CHANNEL_ID, reportText, {
                 parse_mode: 'Markdown',
                 disable_web_page_preview: true

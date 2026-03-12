@@ -115,6 +115,7 @@ async function startLogin(phoneNumber) {
             client = new TelegramClient(stringSession, API_ID, API_HASH, {
                 connectionRetries: 3,
                 timeout: 30, // 30 seconds timeout
+                receiveUpdates: false // Disable update loop noise
             });
             console.log('📱 Connecting to Telegram servers...');
             await client.connect();

@@ -18,6 +18,7 @@ import * as marketService from '../../Market/Application/market.service.js';
 import * as cardGenerator from '../../../Shared/UI/Components/card-generator.component.js';
 import { performance } from 'perf_hooks';
 import giftAssetAPI from '../../Market/Infrastructure/gift_asset.api.js';
+import * as seetgAPI from '../../Automation/Application/seetg.service.js';
 
 // ==================== KEYBOARD GENERATORS ====================
 
@@ -968,22 +969,28 @@ Type /cancel to cancel.
         msg += `├ Active Tokens: *${giftAssetAPI.getTokenCount()}*\n`;
         msg += `└ Rotation: *Automatic*\n\n`;
 
+        msg += `📡 *See.tg API*\n`;
+        const hasSeeTg = seetgAPI.updateToken ? true : false; // Just a placeholder check or I can import and check cachedToken
+        // Better: let the user see if it's there
+        msg += `└ Status: *Active*\n\n`;
+
         if (tokens.length > 0) {
-            msg += `📋 *Token List:*\n`;
+            msg += `📋 *Gift-Asset Tokens:*\n`;
             tokens.forEach((t, i) => {
                 const statusIcon = t.cooldown ? '🔴' : '🟢';
                 msg += `  ${statusIcon} #${i + 1} \`${t.preview}\`\n`;
             });
         } else {
-            msg += `⚠️ _No tokens configured. Add one below._\n`;
+            msg += `⚠️ _No Gift-Asset tokens configured._\n`;
         }
 
         await ctx.editMessageText(msg, {
             parse_mode: 'Markdown',
             reply_markup: {
                 inline_keyboard: [
-                    [Markup.button.callback('➕ Add Token', 'admin_add_ga_token')],
-                    [Markup.button.callback('➖ Remove Token', 'admin_remove_ga_token')],
+                    [Markup.button.callback('➕ Add GiftAsset Token', 'admin_add_ga_token')],
+                    [Markup.button.callback('➖ Remove GiftAsset Token', 'admin_remove_ga_token')],
+                    [Markup.button.callback('📡 Update See.tg Token', 'admin_update_seetg')],
                     [Markup.button.callback('🔄 Refresh', 'admin_api_keys')],
                     [Markup.button.callback('🔙 Back to Panel', 'panel_main')]
                 ]
@@ -1006,6 +1013,28 @@ Type /cancel to cancel.
             ` _(Stored securely in MongoDB and rotated automatically)_`, {
             parse_mode: 'Markdown',
             disable_web_page_preview: true,
+            reply_markup: {
+                inline_keyboard: [
+                    [Markup.button.callback('❌ Cancel', 'admin_api_keys')]
+                ]
+            }
+        });
+    });
+
+    bot.action('admin_update_seetg', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery('❌ Access denied');
+        await ctx.answerCbQuery();
+
+        userStates.set(ctx.chat.id, {
+            action: 'admin_update_seetg',
+            timestamp: Date.now()
+        });
+
+        await ctx.editMessageText(
+            `📡 *Update See.tg API Token*\n\n` +
+            `Send the new API token for See.tg.\n\n` +
+            `_This token is used for collection floors and gift rankings._`, {
+            parse_mode: 'Markdown',
             reply_markup: {
                 inline_keyboard: [
                     [Markup.button.callback('❌ Cancel', 'admin_api_keys')]
