@@ -17,6 +17,22 @@ const MARKETAPP_API_BASE = 'https://api.marketapp.ws';
 const CHANGES_API_BASE = 'https://api.changes.tg';
 const API_TOKEN = process.env.MARKETAPP_API_TOKEN || '';
 
+function safeNum(n, fallback = null) {
+    const x = typeof n === 'string' ? parseFloat(n) : n;
+    return Number.isFinite(x) ? x : fallback;
+}
+
+function formatPct(p, digits = 1) {
+    if (!Number.isFinite(p)) return '—';
+    const sign = p > 0 ? '+' : '';
+    return `${sign}${p.toFixed(digits)}%`;
+}
+
+function toTitleCase(s = '') {
+    if (!s) return '';
+    return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 /**
  * Make authenticated API request to Marketapp
  */
@@ -1404,28 +1420,49 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
         floorChange7d: null,
         transferCount: 0,
         lastTransfer: null,
-        rank: null
+        rank: null,
+        transfers: [],
+        collectionInfo: null,
+        ownerInfo: null
     };
 
     try {
         console.log('📊 Fetching See.tg data...');
-        const seetgGift = await seetg.getGiftInfo(parsed.collectionSlug, parsed.itemNumber);
+        const [seetgGift, floorChanges, history, collectionInfo] = await Promise.all([
+            seetg.getGiftInfo(parsed.collectionSlug, parsed.itemNumber),
+            seetg.getFloorChanges(parsed.collectionSlug),
+            seetg.getGiftHistory(parsed.collectionSlug, parsed.itemNumber),
+            seetg.getCollectionInfo(parsed.collectionSlug)
+        ]);
+
         if (seetgGift) {
             seetgData.ownerUsername = seetgGift.owner?.username || seetgGift.ownerUsername;
             seetgData.ownerName = seetgGift.owner?.name || seetgGift.ownerName;
             seetgData.rank = seetgGift.rank;
         }
 
-        const floorChanges = await seetg.getFloorChanges(parsed.collectionSlug);
         if (floorChanges) {
             seetgData.floorChange24h = floorChanges.change24h;
             seetgData.floorChange7d = floorChanges.change7d;
         }
 
-        const history = await seetg.getGiftHistory(parsed.collectionSlug, parsed.itemNumber);
         if (history) {
             seetgData.transferCount = history.totalTransfers;
             seetgData.lastTransfer = history.lastTransfer;
+            seetgData.transfers = history.transfers || [];
+        }
+
+        if (collectionInfo) {
+            seetgData.collectionInfo = collectionInfo;
+        }
+
+        // Owner profile enrichment (optional)
+        if (seetgData.ownerUsername) {
+            const ownerInfo = await seetg.getOwnerInfo(`@${seetgData.ownerUsername}`);
+            if (ownerInfo) seetgData.ownerInfo = ownerInfo;
+        } else if (giftOwner) {
+            const ownerInfo = await seetg.getOwnerInfo(giftOwner);
+            if (ownerInfo) seetgData.ownerInfo = ownerInfo;
         }
     } catch (e) {
         console.warn('⚠️ See.tg API error:', e.message);
@@ -1436,6 +1473,7 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
     let giftAssetEmission = null;
     let giftAssetCap = null;
     let collectionOffers = null;
+    let providersFee = null;
     try {
         const variants = [
             `${parsed.collectionSlug}-${parsed.itemNumber}`,
@@ -1447,15 +1485,17 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
         
         console.log(`🔗 [GiftAsset] Attempting variants: ${variants.join(', ')}`);
 
-        const [gaEmission, gaCap, gaOffers] = await Promise.all([
+        const [gaEmission, gaCap, gaOffers, gaFees] = await Promise.all([
             giftAssetAPI.getGiftsCollectionsEmission(),
             giftAssetAPI.getGiftsCollectionsMarketCap(),
-            !collection.virtual ? giftAssetAPI.getCollectionOffers(collection.name) : null
+            !collection.virtual ? giftAssetAPI.getCollectionOffers(collection.name) : null,
+            giftAssetAPI.getProvidersFee()
         ]);
         
         giftAssetEmission = gaEmission;
         giftAssetCap = gaCap;
         collectionOffers = gaOffers;
+        providersFee = gaFees;
 
         for (const variant of variants) {
             const gaGift = await giftAssetAPI.getGiftByName(variant);
@@ -1505,6 +1545,7 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
     // Build the premium text report
     const statusDisplay = getStatusDisplay(giftStatus);
     const giftName = `${collection.name} #${parsed.itemNumber}`;
+    const giftUrl = `https://t.me/nft/${parsed.collectionSlug}-${parsed.itemNumber}`;
 
     // Calculate value difference from floor
     const valueVsFloor = collectionFloor > 0 ? ((estimation.estimated - collectionFloor) / collectionFloor * 100) : 0;
@@ -1517,7 +1558,7 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
     else if (valueVsFloor > 50 || estimation.avgRarityScore > 70) giftRating = '⭐⭐⭐⭐';
 
     // ═══════════════════════════════════════
-    // 🔥 PREMIUM GIFT REPORT FORMAT
+    // 🔥 WORLD-CLASS GIFT REPORT FORMAT
     // ═══════════════════════════════════════
 
     let report = ``;
@@ -1532,18 +1573,38 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
     if (giftPrice) {
         report += ` • *${formatNumber(Math.round(giftPrice))} TON* (~$${formatNumber(Math.round(giftPrice * tonPrice))})`;
     }
-    report += `\n\n`;
+    // Data quality headline
+    const dq = estimation.dataQuality || { score: 0, level: 'poor', sources: [] };
+    const dqLabel = (dq.level || '').toUpperCase() || '—';
+    report += `  •  🧾 Data Quality: *${dqLabel}* (${dq.score || 0}/100)\n`;
+    report += `🔗 ${giftUrl}\n\n`;
 
-    // ═══ 💎 ESTIMATED VALUE ═══
-    report += `――――― 💎 *ESTIMATED VALUE* ―――――\n`;
+    // ═══ 💎 FAIR VALUE (EST.) ═══
+    report += `――――― 💎 *FAIR VALUE (EST.)* ―――――\n`;
     report += `▸ 🏷️  *${formatNumber(Math.round(estimation.estimated))} TON*\n`;
     report += `▸ 💵  _~$${formatNumber(Math.round(estimation.estimated * tonPrice))}_\n`;
+
+    if (estimation.valueRange?.low && estimation.valueRange?.high) {
+        report += `▸ 📐 Range: *${formatNumber(estimation.valueRange.low)}* — *${formatNumber(estimation.valueRange.high)} TON* (${estimation.valueRange.spread || ''})\n`;
+    }
 
     // Value vs Floor comparison
     if (valueVsFloor !== 0) {
         const sign = valueVsFloor > 0 ? '+' : '';
         const valueBar = valueVsFloor > 100 ? '🔥🔥🔥' : valueVsFloor > 50 ? '🔥🔥' : valueVsFloor > 20 ? '🔥' : valueVsFloor > 0 ? '📈' : '📉';
         report += `▸ ${valueBar} *${sign}${valueVsFloor.toFixed(0)}%* vs Floor\n`;
+    }
+
+    // Gap vs Market Median (if we have sufficient samples)
+    const medians = [];
+    if (marketPrices?.model?.median) medians.push(marketPrices.model.median);
+    if (marketPrices?.backdrop?.median) medians.push(marketPrices.backdrop.median);
+    if (marketPrices?.symbol?.median) medians.push(marketPrices.symbol.median);
+    const medianAvg = medians.length ? (medians.reduce((a, b) => a + b, 0) / medians.length) : null;
+    const gapPct = (medianAvg && medianAvg > 0) ? ((estimation.estimated / medianAvg) - 1) * 100 : null;
+    if (Number.isFinite(gapPct)) {
+        const label = gapPct <= -10 ? '**UNDERPRICED**' : gapPct >= 10 ? '**OVERPRICED**' : 'Market‑Aligned';
+        report += `▸ 📊 Gap vs Market Median: *${gapPct > 0 ? '+' : ''}${gapPct.toFixed(0)}%* → ${label}\n`;
     }
 
     // Confidence level - Enhanced 5-Level System
@@ -1558,29 +1619,64 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
     const confLevel = confidenceConfig[estimation.confidence] || confidenceConfig['moderate'];
     report += `▸ ${confLevel.emoji} Confidence: _${confLevel.text}_ (${estimation.confidenceScore || 50}%)\n\n`;
 
-    // ═══ 📊 COLLECTION STATS ═══
-    report += `――――― 📊 *COLLECTION STATS* ―――――\n`;
+    // ═══ 📊 COLLECTION PULSE ═══
+    report += `――――― 📊 *COLLECTION PULSE* ―――――\n`;
     report += `▸ 🏛️ *${escapeMD(collection.name)}*\n`;
     if (telegramInfo?.description) {
         const desc = telegramInfo.description.substring(0, 100).replace(/\n/g, ' ');
         report += `▸ 📝 _${escapeMD(desc)}..._\n`;
     }
-    report += `▸ 💰 Floor: *${formatNumber(Math.round(collectionFloor))} TON*\n`;
+
+    // Prefer See.tg collection floor & changes if present (otherwise keep current)
+    const ci = seetgData.collectionInfo;
+    const ciFloor = nanoToTon(ci?.floor) || null;
+    const floorToDisplay = ciFloor && ciFloor > 0 ? ciFloor : collectionFloor;
+    const ci24 = safeNum(ci?.floorChange24h, null);
+    const ci7d = safeNum(ci?.floorChange7d, null);
+    const trendStr = (Number.isFinite(ci24) || Number.isFinite(ci7d))
+        ? ` (24h: ${formatPct(ci24)} | 7d: ${formatPct(ci7d)})  (See.tg)`
+        : (typeof seetgData.floorChange24h === 'number' || typeof seetgData.floorChange7d === 'number')
+            ? ` (24h: ${formatPct(seetgData.floorChange24h)} | 7d: ${formatPct(seetgData.floorChange7d)})  (See.tg)`
+            : '';
+    report += `▸ 💰 Floor: *${formatNumber(Math.round(floorToDisplay))} TON*${trendStr}\n`;
     report += `▸ #️⃣ Item: *#${formatNumber(parsed.itemNumber)}* of ${formatNumber(totalItems)}\n`;
     report += `▸ 🏪 On Sale: *${formatNumber(onSale)}* (${totalItems > 0 ? (onSale / totalItems * 100).toFixed(1) : 0}%)\n`;
     report += `▸ 👥 Owners: *${formatNumber(owners)}*\n`;
-    if (volume7d > 0) {
-        report += `▸ 📈 7d Vol: *${formatNumber(Math.round(volume7d))} TON*\n`;
+    const vol24h = nanoToTon(ci?.volume24h) || null;
+    const vol7d = nanoToTon(ci?.volume7d) || volume7d || null;
+
+    // Market Cap Rank (GiftAsset)
+    if (giftAssetCap && collection.name && giftAssetCap[collection.name]?.market_cap) {
+        const caps = Object.entries(giftAssetCap)
+            .map(([name, v]) => ({ name, cap: safeNum(v?.market_cap, 0) || 0 }))
+            .filter(x => x.cap > 0)
+            .sort((a, b) => b.cap - a.cap);
+        const idx = caps.findIndex(x => x.name === collection.name);
+        const rank = idx >= 0 ? idx + 1 : null;
+        const capValue = safeNum(giftAssetCap[collection.name].market_cap, null);
+        if (capValue) {
+            report += `▸ 💸 Market Cap: *${formatNumber(Math.round(capValue))} TON*`;
+            if (rank) report += ` (Rank #${rank}) 🏆`;
+            report += `  (GiftAsset)\n`;
+        }
     }
 
-    // ═══ Gift-Asset: Emission / Upgrade Stats ═══
+    // Minting / upgrade stats (GiftAsset emission)
     if (giftAssetEmission && collection.name) {
         const emData = giftAssetEmission[collection.name];
         if (emData) {
             const upgradePct = emData.emission > 0 ? ((emData.upgraded / emData.emission) * 100).toFixed(1) : '0';
-            report += `▸ 🔄 Minted: *${formatNumber(emData.emission)}* | Upgraded: *${formatNumber(emData.upgraded)}* (${upgradePct}%)\n`;
+            report += `▸ 🔄 Minting: *${formatNumber(emData.emission)}* Issued | *${formatNumber(emData.upgraded)}* Upgraded (${upgradePct}%)  (GiftAsset)\n`;
         }
     }
+
+    if (vol24h && vol24h > 0) {
+        report += `▸ 💹 24h Vol: *${formatNumber(Math.round(vol24h))} TON*  (See.tg)\n`;
+    }
+    if (vol7d && vol7d > 0) {
+        report += `▸ 📈 7d Vol: *${formatNumber(Math.round(vol7d))} TON*  (${ci?.volume7d ? 'See.tg' : 'Marketapp'})\n`;
+    }
+
     report += `\n`;
 
     // Owner info - prefer See.tg username over wallet
@@ -1590,9 +1686,19 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
             report += ` (${escapeMD(seetgData.ownerName)})`;
         }
         report += `\n`;
+        if (seetgData.ownerInfo && (seetgData.ownerInfo.giftsCount || seetgData.ownerInfo.totalValue)) {
+            const gc = seetgData.ownerInfo.giftsCount ? formatNumber(seetgData.ownerInfo.giftsCount) : '—';
+            const tv = seetgData.ownerInfo.totalValue ? formatNumber(Math.round(seetgData.ownerInfo.totalValue)) : '—';
+            report += `🏷️ *Owner Stats:* Gifts ${gc} | Total Value ${tv}  (See.tg)\n`;
+        }
     } else if (giftOwner) {
         const ownerName = await getOwnerName(giftOwner);
         report += `👤 *Owner:* ${escapeMD(ownerName)}\n`;
+        if (seetgData.ownerInfo && (seetgData.ownerInfo.giftsCount || seetgData.ownerInfo.totalValue)) {
+            const gc = seetgData.ownerInfo.giftsCount ? formatNumber(seetgData.ownerInfo.giftsCount) : '—';
+            const tv = seetgData.ownerInfo.totalValue ? formatNumber(Math.round(seetgData.ownerInfo.totalValue)) : '—';
+            report += `🏷️ *Owner Stats:* Gifts ${gc} | Total Value ${tv}  (See.tg)\n`;
+        }
     }
 
     // Transfer history
@@ -1621,27 +1727,65 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 
     report += `\n`;
 
-    // ═══ 🏦 MULTI-MARKET FLOORS (Gift-Asset) ═══
+    // ═══ 🏦 MULTI‑MARKET LIQUIDITY (Gift‑Asset) ═══
     if (giftAssetData && giftAssetData.providers) {
         const providers = giftAssetData.providers;
         const providerNames = Object.keys(providers);
         if (providerNames.length > 0) {
-            report += `――――― 🏦 *MULTI\-MARKET FLOORS* ―――――\n`;
-            report += `_Cross\-marketplace price intelligence:_\n`;
+            report += `―――― 🏦 *MULTI‑MARKET LIQUIDITY* ――――\n`;
+            report += `Cross-marketplace price intelligence:\n`;
 
             if (giftAssetData.market_floor) {
                 const mf = giftAssetData.market_floor;
                 report += `▸ 📊 Aggregated: *${formatNumber(Math.round(mf.min))}* — *${formatNumber(Math.round(mf.max))} TON* (avg: ${formatNumber(Math.round(mf.avg))})\n`;
             }
 
+            // Compute lowest/highest provider floors + spread
+            const floors = [];
+            for (const pName of providerNames) {
+                const p = providers[pName];
+                if (p?.collection_floor) floors.push({ pName, floor: safeNum(p.collection_floor, null) });
+            }
+            const validFloors = floors.filter(f => Number.isFinite(f.floor) && f.floor > 0);
+            validFloors.sort((a, b) => a.floor - b.floor);
+            const lowest = validFloors[0] || null;
+            const highest = validFloors[validFloors.length - 1] || null;
+            const spreadPct = (lowest && highest && lowest.floor > 0)
+                ? ((highest.floor - lowest.floor) / lowest.floor) * 100
+                : null;
+
             for (const pName of providerNames) {
                 const p = providers[pName];
                 const pEmoji = pName === 'getgems' ? '💎' : pName === 'portals' ? '🌀' : pName === 'tonnel' ? '🔷' : '🏪';
-                const pLabel = pName.charAt(0).toUpperCase() + pName.slice(1);
+                const pLabel = toTitleCase(pName);
+                const fee = safeNum(providersFee?.[pName], null);
+                const feeText = Number.isFinite(fee) ? ` (Fee ${Math.round(fee * 100)}%)` : '';
+                let tag = '';
+                if (lowest && pName === lowest.pName) tag = ' (LOWEST)';
+                if (highest && pName === highest.pName) tag = ' (HIGHEST)';
                 let line = `▸ ${pEmoji} *${pLabel}:*`;
-                if (p.collection_floor) line += ` Floor: *${formatNumber(Math.round(p.collection_floor))} TON*`;
-                if (p.model_floor) line += ` | Model: *${formatNumber(Math.round(p.model_floor))} TON*`;
-                report += line + `\n`;
+                if (p.collection_floor) line += ` *${formatNumber(Math.round(p.collection_floor))} TON*${tag}${feeText}`;
+                report += `${line}\n`;
+            }
+
+            if (Number.isFinite(spreadPct)) {
+                report += `▸ 📉 Cross‑Market Spread: *${spreadPct.toFixed(1)}%*\n`;
+            }
+
+            // Instant exit from best buy offer (net after fee)
+            if (collectionOffers && collectionOffers.offers && collectionOffers.offers.length > 0) {
+                const best = collectionOffers.offers[0];
+                const offerPrice = safeNum(best.price, null);
+                const offerProvider = (best.provider || '').toLowerCase();
+                const fee = safeNum(providersFee?.[offerProvider], 0);
+                if (offerPrice) {
+                    const net = offerPrice * (1 - (Number.isFinite(fee) ? fee : 0));
+                    report += `▸ ⚡ Instant Exit (Best Offer): *${formatNumber(Math.round(offerPrice))} TON*`;
+                    if (Number.isFinite(fee) && fee > 0) {
+                        report += ` → Net *${formatNumber(Math.round(net))} TON* (after fee)`;
+                    }
+                    report += `\n`;
+                }
             }
             report += `\n`;
 
@@ -1701,8 +1845,14 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
         report += `――――― 🛍️ *BEST BUY OFFERS* ―――――\n`;
         const topOffers = collectionOffers.offers.slice(0, 3);
         topOffers.forEach(offer => {
-            const pLabel = offer.provider ? offer.provider.charAt(0).toUpperCase() + offer.provider.slice(1) : 'Market';
-            report += `▸ 💰 *${formatNumber(Math.round(offer.price))} TON* on ${pLabel}\n`;
+            const provider = (offer.provider || 'market').toLowerCase();
+            const pLabel = toTitleCase(provider);
+            const fee = safeNum(providersFee?.[provider], null);
+            const gross = safeNum(offer.price, null);
+            const net = gross && Number.isFinite(fee) ? gross * (1 - fee) : null;
+            let line = `▸ 💰 *${formatNumber(Math.round(gross || 0))} TON* on ${pLabel}`;
+            if (net && net > 0) line += ` → Net *${formatNumber(Math.round(net))} TON*`;
+            report += `${line}\n`;
         });
         report += `\n`;
     }
@@ -1832,6 +1982,76 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
     } else if (seetgData.transferCount > 0) {
         report += `📜 *Transfers:* ${seetgData.transferCount} times\n\n`;
     }
+
+    // ═══ 📈 SALES • VELOCITY • HOLDING ═══
+    report += `――――― 📈 *SALES • VELOCITY • HOLDING* ―――――\n`;
+    if (estimation.advancedData?.forecast?.trend) {
+        const fc = estimation.advancedData.forecast;
+        const label = fc.trend === 'rising' || fc.trend === 'slightly_rising' ? 'Rising' :
+            (fc.trend === 'falling' || fc.trend === 'slightly_falling') ? 'Falling' : 'Stable';
+        report += `▸ 🔮 7d Forecast: *${label}* (${fc.changePercent > 0 ? '+' : ''}${fc.changePercent || 0}%) | Confidence ${fc.confidence || 0}%\n`;
+    }
+    if (estimation.advancedData?.demandSupply?.score) {
+        const ds = estimation.advancedData.demandSupply;
+        report += `▸ ${ds.emoji || '🔥'} Demand/Supply: *${ds.score}/100* (${ds.label || '—'})\n`;
+    }
+
+    // Avg holding time (prefer holding_days if present)
+    let avgHoldingDays = null;
+    if (Array.isArray(seetgData.transfers) && seetgData.transfers.length > 0) {
+        const days = seetgData.transfers
+            .map(t => safeNum(t.holding_days, null))
+            .filter(d => Number.isFinite(d) && d > 0);
+        if (days.length >= 2) {
+            avgHoldingDays = days.reduce((a, b) => a + b, 0) / days.length;
+        } else {
+            // Compute from transfer dates if possible
+            const dates = seetgData.transfers
+                .map(t => t.date ? new Date(t.date).getTime() : null)
+                .filter(ts => Number.isFinite(ts));
+            if (dates.length >= 2) {
+                // Transfers list is usually newest-first; compute consecutive deltas
+                const deltas = [];
+                for (let i = 0; i < dates.length - 1; i++) {
+                    const dt = Math.abs(dates[i] - dates[i + 1]);
+                    const d = dt / (1000 * 60 * 60 * 24);
+                    if (d > 0.5 && d < 3650) deltas.push(d);
+                }
+                if (deltas.length) avgHoldingDays = deltas.reduce((a, b) => a + b, 0) / deltas.length;
+            }
+        }
+    }
+    if (avgHoldingDays) {
+        report += `▸ ⏱ Avg Holding Time: *${Math.round(avgHoldingDays)} days*\n`;
+    }
+
+    // Recent sales sample from local history (if present)
+    try {
+        const recent = salesHistory.getSalesHistory(parsed.collectionSlug, 30) || [];
+        const prices = recent
+            .map(s => safeNum(s.price, null))
+            .filter(p => Number.isFinite(p) && p > 0)
+            .slice(-3);
+        if (prices.length > 0) {
+            report += `▸ 🧾 Recent Sales (sample): *${prices.map(p => formatNumber(Math.round(p))).join(' • ')} TON*\n`;
+        }
+    } catch { }
+
+    // Provider fees headline (if available)
+    if (providersFee && typeof providersFee === 'object') {
+        const feeParts = [];
+        for (const [k, v] of Object.entries(providersFee)) {
+            const fee = safeNum(v, null);
+            if (!Number.isFinite(fee)) continue;
+            if (['portals', 'getgems', 'tonnel'].includes(k)) {
+                feeParts.push(`${toTitleCase(k)} ${Math.round(fee * 100)}%`);
+            }
+        }
+        if (feeParts.length) {
+            report += `▸ 🏧 Market Fee: ${feeParts.join(' vs ')}  (GiftAsset)\n`;
+        }
+    }
+    report += `\n`;
 
     // ═══ 🔍 SIMILAR GIFTS ═══
     const similarGifts = { cheaper: [], pricier: [] };
