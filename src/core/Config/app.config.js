@@ -155,6 +155,15 @@ export const GOLDEN_DICTIONARY = {
     'rich': 'Abundance of wealth.',
     'money': 'The universal medium of exchange.',
 
+    // 🎬 CREATOR ECONOMY ( premium content creator handles )
+    'youtuber': 'A person who creates and publishes video content on YouTube.',
+    'tiktoker': 'A content creator who produces short-form videos on TikTok.',
+    'streamer': 'Someone who broadcasts live content (gaming, chat, etc.) to viewers.',
+    'influencer': 'A person with the power to affect purchasing decisions of others.',
+    'vlogger': 'A person who creates and shares video blog content.',
+    'podcaster': 'A person who hosts or produces podcast content.',
+    'creator': 'One who creates content, products, or experiences.',
+
     // 🎮 GAMING & ENTERTAINMENT (15 words)
     'game': 'Interactive entertainment.',
     'play': 'The essence of gaming.',
@@ -883,7 +892,9 @@ export class TheOracle {
             factors.push(`⌨️ ${keyboardResult.patternName}`);
         }
 
-        if (GOLDEN_DICTIONARY[lower]) {
+        // Creator words get GOLDEN_DICTIONARY definition but NOT CEILING_GOD_TIER (handled by Lexicon tier)
+        const CREATOR_WORDS = new Set(['youtuber', 'tiktoker', 'streamer', 'influencer', 'vlogger', 'podcaster', 'creator']);
+        if (GOLDEN_DICTIONARY[lower] && !CREATOR_WORDS.has(lower)) {
             baseValue = Math.max(baseValue, CONFIG.CEILING_GOD_TIER);
             archetype = 'Golden Elite';
             confidence = 99;

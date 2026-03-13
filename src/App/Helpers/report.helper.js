@@ -5,6 +5,8 @@
  * Extracted from bot.entry.js to reduce monolith size.
  */
 
+import { GOLDEN_DICTIONARY } from '../../core/Config/app.config.js';
+
 /**
  * Escape Markdown V1 special characters in text
  * Prevents Telegram "can't parse entities" errors from AI-generated text
@@ -316,13 +318,22 @@ function calculateRiskScore(username, estValue) {
 /**
  * Build FULL detailed caption — SUPREME PREMIUM FORMAT
  */
+function resolveDefinition(rawUsername, estValue) {
+    const lower = rawUsername.toLowerCase();
+    const golden = GOLDEN_DICTIONARY[lower];
+    const linguistics = estValue.linguistics?.meaning;
+    const aiDef = estValue.aiDefinition;
+    const raw = golden || linguistics || aiDef;
+    if (raw && raw !== 'None' && raw !== 'N/A' && raw !== 'Gibberish') return raw;
+    if (/[0-9_]/.test(rawUsername)) return 'Alphanumeric handle';
+    if (/^[a-z]{5,}$/.test(lower) && !/[aeiou]{2,}/.test(lower)) return 'Random string';
+    return 'Personal handle';
+}
+
 export function buildFullCaption(data, cardData, tonPrice, rarity, estValue, suggestions = []) {
     const username = data.username.replace('@', '').toUpperCase().split('').join(' ');
     const rawUsername = data.username.replace('@', '');
-    const rawDefinition = estValue.linguistics?.meaning || estValue.aiDefinition || null;
-    const definition = (rawDefinition && rawDefinition !== 'None' && rawDefinition !== 'N/A' && rawDefinition !== 'Gibberish')
-        ? rawDefinition
-        : "Digital Asset";
+    const definition = resolveDefinition(rawUsername, estValue);
 
     const statusIcons = {
         'sold': '🔴 Sold',
@@ -380,7 +391,10 @@ export function buildFullCaption(data, cardData, tonPrice, rarity, estValue, sug
 
     // 💎 HEADER
     let msg = `💎 *${escapeMD(username)}*\n`;
-    msg += `_${escapeMD(definition)}_\n\n`;
+    msg += `_${escapeMD(definition)}_\n`;
+    const dictMeaning = GOLDEN_DICTIONARY[rawUsername.toLowerCase()] || estValue.linguistics?.meaning;
+    if (dictMeaning) msg += `📖 *معنی لغوی:* _${escapeMD(dictMeaning)}_\n`;
+    msg += `\n`;
 
     // 💰 FAIR VALUE (EST.)
     msg += `――――― 💰 *FAIR VALUE (EST.)* ―――――\n`;
@@ -500,20 +514,16 @@ export function buildFullCaption(data, cardData, tonPrice, rarity, estValue, sug
     msg += `▸ Risk Score: *${risk}/100* → \`${drawBar(risk)}\`\n`;
     msg += `\n`;
 
-    // 🧪 COMPARABLES
+    // 🧪 COMPARABLES (only real comparables, never _bot or x suffix)
     const similarSources = estValue.similar || estValue.factors || [];
     const allSimilar = (Array.isArray(similarSources) ? similarSources : [similarSources])
         .filter(f => f && typeof f === 'string' && f.startsWith('@'))
+        .filter(f => !/_bot/i.test(f))
         .slice(0, 6);
 
     if (allSimilar.length > 0) {
         msg += `――――― 📊 *COMPARABLES* ―――――\n`;
         allSimilar.forEach(f => msg += `▸ ${escapeMD(f)}\n`);
-        msg += `\n`;
-    } else if (estValue.factors && estValue.factors.length > 0) {
-        msg += `――――― 📊 *COMPARABLES* ―――――\n`;
-        msg += `▸ ${escapeMD(data.username)}\\_bot\n`;
-        msg += `▸ ${escapeMD(data.username)}x\n`;
         msg += `\n`;
     }
 

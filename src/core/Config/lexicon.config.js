@@ -325,6 +325,11 @@ chocolate vanilla caramel strawberry mint cookie brownie cake pie muffin cupcake
 ice cream gelato sorbet frozen yogurt sundae shake smoothie
 `.split(/\s+/).filter(Boolean);
 
+// 🎬 CREATOR ECONOMY (premium content-creator handles)
+const TIER_4_CREATOR = `
+youtuber tiktoker streamer influencer vlogger podcaster creator
+`.split(/\s+/).filter(Boolean);
+
 // 🎵 MUSIC & ENTERTAINMENT
 const TIER_4_MUSIC = `
 music song track album single remix cover beat drop bass drum melody harmony rhythm tempo
@@ -354,6 +359,9 @@ league division conference playoff final semifinal round bracket
 record stat average percentage ratio rating rank point score goal assist
 shot dunk slam three pointer free throw layup jumper fadeaway
 `.split(/\s+/).filter(Boolean);
+
+// 🎬 CREATOR ECONOMY (premium content creator handles)
+const TIER_4_CREATOR = `youtuber tiktoker streamer influencer vlogger podcaster creator`.split(/\s+/).filter(Boolean);
 
 // ╔═══════════════════════════════════════════════════════════════════════════════════════════════════╗
 // ║  BIGRAM SCORING MODEL (ML-Calibrated)                                                              ║
@@ -483,6 +491,7 @@ export const Lexicon = {
     tier4Tech: new Set(TIER_4_TECH.map(w => w.toLowerCase())),
     tier4Social: new Set(TIER_4_SOCIAL.map(w => w.toLowerCase())),
     tier4Verbs: new Set(TIER_4_VERBS.map(w => w.toLowerCase())),
+    tier4Creator: new Set(TIER_4_CREATOR.map(w => w.toLowerCase())),
     tier4Gaming: new Set(TIER_4_GAMING.map(w => w.toLowerCase())),
     tier4Food: new Set(TIER_4_FOOD.map(w => w.toLowerCase())),
     tier4Music: new Set(TIER_4_MUSIC.map(w => w.toLowerCase())),
@@ -514,6 +523,7 @@ export const Lexicon = {
         if (this.tier3Lucky.has(w)) return { tier: 3, context: 'Lucky Number', multiplier: 12 };
 
         // Tier 4: Expanded Universe
+        if (this.tier4Creator.has(w)) return { tier: 4, context: 'Creator Economy', multiplier: 8 };
         if (this.tier4Nature.has(w)) return { tier: 4, context: 'Nature/Animals', multiplier: 8 };
         if (this.tier4Jobs.has(w)) return { tier: 4, context: 'Professional', multiplier: 6 };
         if (this.tier4Tech.has(w)) return { tier: 4, context: 'Technology', multiplier: 8 };

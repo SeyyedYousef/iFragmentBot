@@ -87,6 +87,10 @@ Examples: @ali_1380 (1), @my_channel_123 (1), @xhgqwpzm (2), @crypto99 (5), @bes
 6. 4-CHAR FLOOR: If length = 4, minimum value is ALWAYS 5,000 TON regardless of quality.
 7. JUNK DETECTION: Numbers + underscores + long gibberish (5+ chars) = near zero value.
 
+CRITICAL - definition: NEVER use "Digital Asset". Use the ACTUAL dictionary meaning for real words (Oxford/Cambridge style). For gibberish use "Random String". For personal handles use "Personal Handle".
+CRITICAL - similar: ONLY list REAL comparable usernames from the same category. NEVER add @username_bot or @usernamex. Only actual sold or market-comparable handles.
+CREATOR ECONOMY: youtuber, tiktoker, streamer, influencer, vlogger, podcaster = LIQUID tier (20K-50K TON).
+
 ═══ TARGET USERNAME ═══
 Username: "@${cleanName}"
 Length: ${len} characters
@@ -144,6 +148,9 @@ OUTPUT: {"analysis":{"verdict":"SPECULATIVE","reasoning":"Random consonant clust
 
 INPUT: "@dream" | 5 chars
 OUTPUT: {"analysis":{"verdict":"LIQUID","reasoning":"'Dream' is a deeply evocative English noun and verb that resonates universally. Associated with aspiration, creativity, and vision — perfect for startups, music brands, and lifestyle projects. Clean 5-letter dictionary word with strong emotional pull and excellent brandability.","definition":"A series of mental images during sleep; an aspiration or goal"},"valuation":{"ton":60000,"confidence":82,"trend":"ACCUMULATION"},"best_for":["Startup Brand","Music Label","Lifestyle Platform"],"linguistics":{"type":"Noun","meaning":"Aspiration, vision, mental imagery","pronunciation":"dreem","syllables":"1","recall":10,"typability":9},"aura":{"archetype":"The Creator","vibe":"Ethereal, aspirational, limitless"},"scores":{"liquidity":78,"rarity":7,"visual":88},"similar":["@vision","@imagine"]}
+
+INPUT: "@youtuber" | 8 chars
+OUTPUT: {"analysis":{"verdict":"LIQUID","reasoning":"Creator Economy keyword. A youtuber is a content creator who publishes videos on YouTube. High demand from creators, agencies, and media brands. Strong brand appeal in the $100B+ creator economy.","definition":"A person who creates and publishes video content on YouTube"},"valuation":{"ton":35000,"confidence":85,"trend":"ACCUMULATION"},"best_for":["Content Creator","Media Brand","Influencer"],"linguistics":{"type":"Noun","meaning":"YouTube content creator","pronunciation":"yoo-tyoo-ber","syllables":"3","recall":10,"typability":8},"aura":{"archetype":"The Creator","vibe":"Modern, viral, authentic"},"scores":{"liquidity":75,"rarity":7,"visual":85},"similar":["@streamer","@tiktoker"]}
 
 Now evaluate "@${cleanName}" (${len} chars). OUTPUT JSON ONLY:`;
 
