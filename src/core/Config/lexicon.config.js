@@ -360,9 +360,6 @@ record stat average percentage ratio rating rank point score goal assist
 shot dunk slam three pointer free throw layup jumper fadeaway
 `.split(/\s+/).filter(Boolean);
 
-// 🎬 CREATOR ECONOMY (premium content creator handles)
-const TIER_4_CREATOR = `youtuber tiktoker streamer influencer vlogger podcaster creator`.split(/\s+/).filter(Boolean);
-
 // ╔═══════════════════════════════════════════════════════════════════════════════════════════════════╗
 // ║  BIGRAM SCORING MODEL (ML-Calibrated)                                                              ║
 // ║  Purpose: Calculate "English-Likeness" for brandability scoring                                    ║
