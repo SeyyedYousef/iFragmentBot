@@ -5,7 +5,7 @@
 
 import fetch from 'node-fetch';
 import * as marketService from './market.service.js';
-import { tonPriceCache } from '../../Shared/Infra/Cache/cache.service.js';
+import { tonPriceCache } from '../../../Shared/Infra/Cache/cache.service.js';
 import { getBrowser } from '../../../Shared/UI/Components/card-generator.component.js';
 
 // Format number with commas
