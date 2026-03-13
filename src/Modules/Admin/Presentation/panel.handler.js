@@ -19,6 +19,7 @@ import * as cardGenerator from '../../../Shared/UI/Components/card-generator.com
 import { performance } from 'perf_hooks';
 import giftAssetAPI from '../../Market/Infrastructure/gift_asset.api.js';
 import * as seetgAPI from '../../Automation/Application/seetg.service.js';
+import apifyAPI from '../../Market/Infrastructure/apify.api.js';
 
 // ==================== KEYBOARD GENERATORS ====================
 
@@ -974,6 +975,10 @@ Type /cancel to cancel.
         // Better: let the user see if it's there
         msg += `└ Status: *Active*\n\n`;
 
+        msg += `🧩 *Apify*\n`;
+        msg += `├ Active Tokens: *${apifyAPI.getTokenCount()}*\n`;
+        msg += `└ Rotation: *Round-robin*\n\n`;
+
         if (tokens.length > 0) {
             msg += `📋 *Gift-Asset Tokens:*\n`;
             tokens.forEach((t, i) => {
@@ -984,12 +989,24 @@ Type /cancel to cancel.
             msg += `⚠️ _No Gift-Asset tokens configured._\n`;
         }
 
+        const apifyTokens = apifyAPI.getTokenList();
+        if (apifyTokens.length > 0) {
+            msg += `\n📋 *Apify Tokens:*\n`;
+            apifyTokens.forEach((t, i) => {
+                msg += `  🟢 #${i + 1} \`${t.preview}\`\n`;
+            });
+        } else {
+            msg += `\n⚠️ _No Apify tokens configured._\n`;
+        }
+
         await ctx.editMessageText(msg, {
             parse_mode: 'Markdown',
             reply_markup: {
                 inline_keyboard: [
                     [Markup.button.callback('➕ Add GiftAsset Token', 'admin_add_ga_token')],
                     [Markup.button.callback('➖ Remove GiftAsset Token', 'admin_remove_ga_token')],
+                    [Markup.button.callback('➕ Add Apify Token', 'admin_add_apify_token')],
+                    [Markup.button.callback('➖ Remove Apify Token', 'admin_remove_apify_token')],
                     [Markup.button.callback('📡 Update See.tg Token', 'admin_update_seetg')],
                     [Markup.button.callback('🔄 Refresh', 'admin_api_keys')],
                     [Markup.button.callback('🔙 Back to Panel', 'panel_main')]
@@ -1097,6 +1114,60 @@ Type /cancel to cancel.
                     [Markup.button.callback('🔙 Back to Panel', 'panel_main')]
                 ]
             }
+        });
+    });
+
+    // ==================== APIFY TOKEN MANAGEMENT ====================
+
+    bot.action('admin_add_apify_token', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery('❌ Access denied');
+        await ctx.answerCbQuery();
+
+        userStates.set(ctx.chat.id, {
+            action: 'admin_add_apify_token',
+            timestamp: Date.now()
+        });
+
+        await ctx.editMessageText(
+            `🧩 *Add Apify Token*\n\n` +
+            `Paste your Apify token.\n\n` +
+            `_Stored securely in MongoDB and used for Fragment scraping jobs._`, {
+            parse_mode: 'Markdown',
+            reply_markup: {
+                inline_keyboard: [[Markup.button.callback('❌ Cancel', 'admin_api_keys')]]
+            }
+        });
+    });
+
+    bot.action('admin_remove_apify_token', async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery('❌ Access denied');
+        await ctx.answerCbQuery();
+
+        const tokens = apifyAPI.getTokenList();
+        if (tokens.length === 0) {
+            return ctx.editMessageText(`⚠️ No Apify tokens to remove.`, {
+                reply_markup: { inline_keyboard: [[Markup.button.callback('🔙 Back', 'admin_api_keys')]] }
+            });
+        }
+
+        const buttons = tokens.map((t, i) => [
+            Markup.button.callback(`🗑 #${i + 1} ${t.preview}`, `admin_del_apify_${i}`)
+        ]);
+        buttons.push([Markup.button.callback('❌ Cancel', 'admin_api_keys')]);
+
+        await ctx.editMessageText(`🗑 *Remove Apify Token*\n\nSelect the token to remove:`, {
+            parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: buttons }
+        });
+    });
+
+    bot.action(/^admin_del_apify_(\d+)$/, async (ctx) => {
+        if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery('❌ Access denied');
+        const idx = parseInt(ctx.match[1], 10);
+        const removed = await apifyAPI.removeToken(idx);
+        await ctx.answerCbQuery(removed ? '✅ Token removed' : '❌ Invalid token index');
+        return ctx.telegram.sendMessage(ctx.chat.id, '🔄 Updated Apify token list.', {
+            reply_markup: { inline_keyboard: [[Markup.button.callback('🔑 API Keys', 'admin_api_keys')]] }
         });
     });
 

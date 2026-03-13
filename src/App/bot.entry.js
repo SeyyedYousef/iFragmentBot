@@ -11,6 +11,7 @@ import { getTonPrice, getTonMarketStats, scrapeFragment, generateShortInsight, g
 import { getGiftStats, get888Stats } from '../Modules/Market/Application/market.service.js';
 import { generateNewsCard, generateNewsCard2, generateMarketCard, getPage, generateFlexCard } from '../Shared/UI/Components/card-generator.component.js';
 import { generateFlexCard as generateGiftFlexCard } from '../Modules/Admin/Application/flex-card.service.js';
+import { generateNumberFlexCard } from '../Modules/Admin/Application/number-flex-card.service.js';
 import { animateLoading } from '../Shared/UI/Logic/animation.service.js';
 import { fragmentCache, tonPriceCache, portfolioCache, getAllCacheStats } from '../Shared/Infra/Cache/cache.service.js';
 
@@ -33,6 +34,7 @@ import { getPoolStats } from '../Modules/Market/Infrastructure/fragment.reposito
 import { globalLimiter, withUserLimit, isOverloaded, getEstimatedWaitTime, getLimiterStats } from '../Shared/Infra/Network/rate-limiter.service.js';
 import * as accountManager from '../Modules/User/Application/account-manager.service.js';
 import { generateGiftReport, parseGiftLink, formatNumber } from '../Modules/Market/Application/marketapp.service.js';
+import { generateNumberReport } from '../Modules/Market/Application/number-report.service.js';
 // import salesMonitor from '../Modules/Monitoring/Application/sales-monitor.service.js'; // REMOVED
 import * as dailyScheduler from '../Modules/Automation/Application/daily-scheduler.service.js';
 import { generateWalletReport, handleUsernamePagination, handleNumberPagination, handleGiftPagination } from '../Modules/Monitoring/Application/wallet-tracker.service.js';
@@ -516,6 +518,65 @@ async function initAndLaunch() {
                 reply_markup: {
                     inline_keyboard: [
                         [{ text: '🔄 Try Again', callback_data: 'report_gifts' }],
+                        [{ text: '🔙 Main Menu', callback_data: 'back_to_menu' }]
+                    ]
+                }
+            });
+            throw error;
+        }
+    });
+
+    // Register Number Report handler
+    jobQueue.registerHandler(JOB_TYPES.NUMBER_REPORT, async (job) => {
+        const { chatId, data } = job;
+        const { input, tonPrice } = data;
+
+        try {
+            const result = await generateNumberReport(input, tonPrice);
+
+            await bot.telegram.sendMessage(chatId, result.report, {
+                parse_mode: 'Markdown',
+                disable_web_page_preview: true,
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '📱 Analyze Another Number', callback_data: 'report_numbers' }],
+                        [{ text: '🔙 Main Menu', callback_data: 'back_to_menu' }]
+                    ]
+                }
+            });
+
+            try {
+                const cardData = {
+                    number: result.number,
+                    formattedNumber: result.formattedNumber,
+                    price: formatNumber(Math.round(result.estimatedValue)),
+                    verdict: result.verdict || 'STANDARD',
+                    status: (result.status || '').toUpperCase(),
+                    floor: formatNumber(Math.round(result.floor || 0)),
+                    vsFloor: `${result.vsFloor >= 0 ? '+' : ''}${result.vsFloor.toFixed(0)}%`,
+                    pattern: result.pattern || '',
+                    confidence: (result.report || '').includes('Confidence: *High*') ? 'High' :
+                        (result.report || '').includes('Confidence: *Medium*') ? 'Medium' : 'Low'
+                };
+                let imageBuffer = await generateNumberFlexCard(cardData);
+                if (!Buffer.isBuffer(imageBuffer)) imageBuffer = Buffer.from(imageBuffer);
+                if (imageBuffer && imageBuffer.length > 0) {
+                    await bot.telegram.sendPhoto(chatId, { source: imageBuffer }, {
+                        caption: `📱 *${result.formattedNumber}*`,
+                        parse_mode: 'Markdown'
+                    });
+                }
+            } catch (cardError) {
+                console.error('Number Flex Card error:', cardError.message);
+            }
+
+            return { success: true, result };
+        } catch (error) {
+            await bot.telegram.sendMessage(chatId,
+                `❌ Error generating number report:\n${error.message}\n\nPlease check the format and try again.`, {
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '🔄 Try Again', callback_data: 'report_numbers' }],
                         [{ text: '🔙 Main Menu', callback_data: 'back_to_menu' }]
                     ]
                 }

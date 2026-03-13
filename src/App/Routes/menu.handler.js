@@ -255,19 +255,26 @@ Instantly analyze the true market value of any Telegram Gift using multi\\-marke
         }
     });
 
-    // ==================== ANONYMOUS NUMBERS (Coming Soon) ====================
+    // ==================== ANONYMOUS NUMBERS (+888) ====================
 
     bot.action('report_numbers', async (ctx) => {
-        await ctx.answerCbQuery('🚧 Coming Soon!');
+        await ctx.answerCbQuery();
+        userStates.set(ctx.chat.id, {
+            action: 'number_report',
+            timestamp: Date.now()
+        });
 
         const promptText = `
-✦ *\\+888 ANONYMOUS NUMBERS*
+✦ *+888 ANONYMOUS NUMBERS*
 ━━━━━━━━━━━━━━━━━━━━━
 
-The anonymous numbers analysis tool is currently under development\\.
+Analyze collectible anonymous numbers from Fragment\\.
 
-🔒 *Status:* Coming very soon\\.
-✧ _Thank you for your patience\\._
+📌 Example: \`https://fragment.com/number/8881234567890\`
+📌 Or: \`+8881234567890\`
+
+✧ *Ready to analyze:*
+💬 _Please send the number link or +888 number below:_
 `;
 
         try {
@@ -275,7 +282,7 @@ The anonymous numbers analysis tool is currently under development\\.
                 parse_mode: 'Markdown',
                 reply_markup: {
                     inline_keyboard: [
-                        [{ text: '🔙 Main Menu', callback_data: 'back_to_menu' }]
+                        [{ text: '❌ Cancel', callback_data: 'cancel_number_report' }]
                     ]
                 }
             });
@@ -283,7 +290,7 @@ The anonymous numbers analysis tool is currently under development\\.
             await ctx.replyWithMarkdown(promptText, {
                 reply_markup: {
                     inline_keyboard: [
-                        [{ text: '🔙 Main Menu', callback_data: 'back_to_menu' }]
+                        [{ text: '❌ Cancel', callback_data: 'cancel_number_report' }]
                     ]
                 }
             });
@@ -331,6 +338,22 @@ You have cancelled the current operation and returned to the menu\\.
     });
 
     bot.action('cancel_gift_report', async (ctx) => {
+        await ctx.answerCbQuery('❌ Cancelled');
+        userStates.delete(ctx.chat.id);
+
+        try {
+            await ctx.editMessageText(reportCancelMenu, {
+                parse_mode: 'Markdown',
+                reply_markup: reportCancelKeyboard
+            });
+        } catch (e) {
+            await ctx.replyWithMarkdown(reportCancelMenu, {
+                reply_markup: reportCancelKeyboard
+            });
+        }
+    });
+
+    bot.action('cancel_number_report', async (ctx) => {
         await ctx.answerCbQuery('❌ Cancelled');
         userStates.delete(ctx.chat.id);
 
@@ -641,6 +664,13 @@ export async function handleMenuTextMessage(ctx, state, bot, isAdmin, getTelegra
     if (state.action === 'gift_report') {
         userStates.delete(chatId);
         await handleGroupCommand(ctx, `!gift ${input}`, handleComparison, getTelegramClient);
+        return true;
+    }
+
+    // Handle Number Report
+    if (state.action === 'number_report') {
+        userStates.delete(chatId);
+        await handleGroupCommand(ctx, `!number ${input}`, handleComparison, getTelegramClient);
         return true;
     }
 

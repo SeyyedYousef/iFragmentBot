@@ -10,6 +10,7 @@ import { calculateRarity, estimateValue } from '../../core/Config/app.config.js'
 import { buildFullCaption, escapeMD } from '../Helpers/report.helper.js';
 import { scrapeFragment, generateShortInsight, getTonPrice } from '../../Modules/Market/Infrastructure/fragment.repository.js';
 import { generateGiftReport, parseGiftLink, formatNumber } from '../../Modules/Market/Application/marketapp.service.js';
+import { parseNumberLink } from '../../Modules/Market/Application/number-report.service.js';
 import { generateFlexCard } from '../../Shared/UI/Components/card-generator.component.js';
 import { generateFlexCard as generateGiftFlexCard } from '../../Modules/Admin/Application/flex-card.service.js';
 import { getOwnerWalletByUsername } from '../../Modules/Market/Application/portfolio.service.js';
@@ -168,6 +169,49 @@ export async function handleGroupCommand(ctx, input, handleComparison, getTelegr
                     messageId: statusMsg.message_id
                 });
 
+            } catch (error) {
+                await ctx.reply(`❌ ${error.message}`, { reply_to_message_id: ctx.message.message_id });
+            }
+        }
+
+        // !Number <link|+888XXXXXXXXXX>
+        else if (command === '!number' || command === '!numbers' || command === '!888') {
+            if (args.length === 0) return ctx.reply('⚠️ Usage: `!number https://fragment.com/number/8881234567890` or `!number +8881234567890`', { parse_mode: 'Markdown' });
+
+            const input = args[0];
+            const parsed = parseNumberLink(input);
+            if (!parsed.isValid) {
+                return ctx.reply('⚠️ Invalid number format. Use Fragment link or +888XXXXXXXXXX', { reply_to_message_id: ctx.message.message_id });
+            }
+
+            const limitCheck = useFeature(userId, 'credits');
+            if (!limitCheck.success) {
+                return ctx.reply(formatNoCreditsMessage('credits', userId), { parse_mode: 'Markdown', reply_to_message_id: ctx.message.message_id });
+            }
+
+            try {
+                const tonPrice = tonPriceCache.get('price') || 5.5;
+                const jobData = { input, tonPrice };
+                const estimatedWait = jobQueue.getEstimatedWait(null);
+
+                let statusMsg;
+                if (estimatedWait > 5) {
+                    statusMsg = await ctx.reply(formatQueueMessage(jobQueue.getPosition(null) + 1, estimatedWait, false), {
+                        parse_mode: 'Markdown',
+                        reply_to_message_id: ctx.message.message_id
+                    });
+                } else {
+                    statusMsg = await ctx.reply('📱 Analyzing number...', { reply_to_message_id: ctx.message.message_id });
+                }
+
+                await jobQueue.add({
+                    type: JOB_TYPES.NUMBER_REPORT,
+                    userId,
+                    chatId: ctx.chat.id,
+                    data: jobData,
+                    priority: PRIORITIES.NORMAL,
+                    messageId: statusMsg.message_id
+                });
             } catch (error) {
                 await ctx.reply(`❌ ${error.message}`, { reply_to_message_id: ctx.message.message_id });
             }

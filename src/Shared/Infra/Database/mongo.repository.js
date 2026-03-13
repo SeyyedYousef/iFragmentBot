@@ -383,6 +383,57 @@ export async function deleteGiftAssetToken(token) {
         return false;
     }
 }
+
+/**
+ * Save an Apify API token to MongoDB
+ */
+export async function addApifyToken(token) {
+    if (!db) return false;
+    try {
+        await db.collection('apify_tokens').updateOne(
+            { token },
+            {
+                $set: { token, createdAt: new Date() }
+            },
+            { upsert: true }
+        );
+        return true;
+    } catch (error) {
+        console.error('Failed to add Apify token:', error.message);
+        return false;
+    }
+}
+
+/**
+ * Load all Apify API tokens from MongoDB
+ */
+export async function loadApifyTokens() {
+    if (!db) {
+        await connectDB();
+        if (!db) return [];
+    }
+    try {
+        const results = await db.collection('apify_tokens').find({}).toArray();
+        return results.map(r => r.token);
+    } catch (error) {
+        console.error('Failed to load Apify tokens:', error.message);
+        return [];
+    }
+}
+
+/**
+ * Delete an Apify API token from MongoDB
+ */
+export async function deleteApifyToken(token) {
+    if (!db) return false;
+    try {
+        await db.collection('apify_tokens').deleteOne({ token });
+        return true;
+    } catch (error) {
+        console.error('Failed to delete Apify token:', error.message);
+        return false;
+    }
+}
 /**
  * Save See.tg API token to MongoDB
  */

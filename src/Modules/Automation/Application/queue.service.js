@@ -26,6 +26,7 @@ const CONFIG = {
 export const JOB_TYPES = {
     // Heavy jobs (use Puppeteer)
     GIFT_REPORT: 'gift_report',
+    NUMBER_REPORT: 'number_report',
     USERNAME_REPORT: 'username_report',
     GIFT_CARD: 'gift_card',
     FLEX_CARD: 'flex_card',
@@ -39,6 +40,7 @@ export const JOB_TYPES = {
 // Jobs that require Puppeteer (heavy)
 const HEAVY_JOB_TYPES = new Set([
     JOB_TYPES.GIFT_REPORT,
+    JOB_TYPES.NUMBER_REPORT,
     JOB_TYPES.USERNAME_REPORT,
     JOB_TYPES.GIFT_CARD,
     JOB_TYPES.FLEX_CARD,
@@ -162,6 +164,14 @@ class JobQueue {
         }
 
         // Deduplication: Prevent duplicate Gift Processing (Global Check)
+        if (type === JOB_TYPES.NUMBER_REPORT && data.input) {
+            for (const job of this.jobs.values()) {
+                if ((job.status === JOB_STATUS.QUEUED || job.status === JOB_STATUS.PROCESSING) &&
+                    job.type === JOB_TYPES.NUMBER_REPORT && job.data?.input === data.input) {
+                    throw new Error('This number is already being analyzed.');
+                }
+            }
+        }
         if (type === JOB_TYPES.GIFT_REPORT && data.link) {
             for (const job of this.jobs.values()) {
                 if (

@@ -13,6 +13,7 @@ import { getGiftStats, get888Stats } from '../../Modules/Market/Application/mark
 import { generateNewsCard, generateNewsCard2, generateMarketCard } from '../../Shared/UI/Components/card-generator.component.js';
 import giftAssetAPI from '../../Modules/Market/Infrastructure/gift_asset.api.js';
 import * as seetgAPI from '../../Modules/Automation/Application/seetg.service.js';
+import apifyAPI from '../../Modules/Market/Infrastructure/apify.api.js';
 import {
     getStats,
     getAllUsers,
@@ -549,6 +550,35 @@ ${input}
             });
         } else {
             await ctx.replyWithMarkdown(`❌ *Failed to update See.tg token.*`, {
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '🔙 API Keys', callback_data: 'admin_api_keys' }]
+                    ]
+                }
+            });
+        }
+        return true;
+    }
+
+    // Handle Apify token addition
+    if (state.action === 'admin_add_apify_token' && isAdmin(ctx.from.id)) {
+        userStates.delete(chatId);
+
+        const token = input.trim();
+        const added = await apifyAPI.addToken(token);
+
+        if (added) {
+            await ctx.replyWithMarkdown(
+                `✅ *Apify Token Added!*\n\n🧩 \`${token.substring(0, 8)}...${token.slice(-4)}\`\n📊 Total: *${apifyAPI.getTokenCount()}* tokens`, {
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '🔙 API Keys', callback_data: 'admin_api_keys' }]
+                    ]
+                }
+            });
+        } else {
+            await ctx.replyWithMarkdown(
+                `❌ *Failed to add Apify token.*\n\nEither the token is too short or it already exists.`, {
                 reply_markup: {
                     inline_keyboard: [
                         [{ text: '🔙 API Keys', callback_data: 'admin_api_keys' }]
