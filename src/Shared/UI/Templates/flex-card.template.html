@@ -366,19 +366,19 @@
 
             // Base font size
             let fontSize = 160;
-            textElement.style.fontSize = fontSize + 'px';
+            textElement.style.fontSize = `${fontSize}px`;
 
             // Reduce size until it fits
             while (textElement.scrollWidth > maxWidth && fontSize > 40) {
                 fontSize -= 5;
-                textElement.style.fontSize = fontSize + 'px';
+                textElement.style.fontSize = `${fontSize}px`;
             }
 
             // Additional logic for very long strings or very short ones
             if (textContent.length <= 4) {
                 // Massive boost for short names like @ali
                 fontSize = 200;
-                textElement.style.fontSize = fontSize + 'px';
+                textElement.style.fontSize = `${fontSize}px`;
             }
         }
 

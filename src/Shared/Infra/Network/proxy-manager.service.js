@@ -3,16 +3,16 @@
  * Handles proxy management for Telegram accounts
  */
 
-import { proxies } from '../../../database/panelDatabase.js';
+import { proxies } from "../../../database/panelDatabase.js";
 
 // ==================== PROXY TYPES ====================
 
 export const PROXY_TYPES = {
-    SOCKS5: 'socks5',
-    SOCKS4: 'socks4',
-    HTTP: 'http',
-    HTTPS: 'https',
-    MTPROTO: 'mtproto'
+	SOCKS5: "socks5",
+	SOCKS4: "socks4",
+	HTTP: "http",
+	HTTPS: "https",
+	MTPROTO: "mtproto",
 };
 
 // ==================== PROXY CRUD ====================
@@ -26,8 +26,8 @@ export const PROXY_TYPES = {
  * @param {string} password - Optional password
  * @returns {number} Proxy ID
  */
-export function addProxy(type, host, port, username = '', password = '') {
-    return proxies.add(type, host, port, username, password);
+export function addProxy(type, host, port, username = "", password = "") {
+	return proxies.add(type, host, port, username, password);
 }
 
 /**
@@ -37,26 +37,35 @@ export function addProxy(type, host, port, username = '', password = '') {
  * @returns {{success: number, failed: number, errors: string[]}}
  */
 export function addProxiesFromText(text) {
-    const lines = text.split('\n').map(l => l.trim()).filter(l => l);
-    const result = { success: 0, failed: 0, errors: [] };
+	const lines = text
+		.split("\n")
+		.map((l) => l.trim())
+		.filter((l) => l);
+	const result = { success: 0, failed: 0, errors: [] };
 
-    for (const line of lines) {
-        try {
-            const parsed = parseProxyString(line);
-            if (parsed) {
-                addProxy(parsed.type, parsed.host, parsed.port, parsed.username, parsed.password);
-                result.success++;
-            } else {
-                result.failed++;
-                result.errors.push(`Invalid format: ${line}`);
-            }
-        } catch (error) {
-            result.failed++;
-            result.errors.push(`${line}: ${error.message}`);
-        }
-    }
+	for (const line of lines) {
+		try {
+			const parsed = parseProxyString(line);
+			if (parsed) {
+				addProxy(
+					parsed.type,
+					parsed.host,
+					parsed.port,
+					parsed.username,
+					parsed.password,
+				);
+				result.success++;
+			} else {
+				result.failed++;
+				result.errors.push(`Invalid format: ${line}`);
+			}
+		} catch (error) {
+			result.failed++;
+			result.errors.push(`${line}: ${error.message}`);
+		}
+	}
 
-    return result;
+	return result;
 }
 
 /**
@@ -67,105 +76,106 @@ export function addProxiesFromText(text) {
  * - host:port (defaults to socks5)
  */
 function parseProxyString(str) {
-    // URL format: type://[user:pass@]host:port
-    const urlPattern = /^(socks[45]?|https?|mtproto):\/\/(?:([^:]+):([^@]+)@)?([^:]+):(\d+)$/i;
-    const urlMatch = str.match(urlPattern);
+	// URL format: type://[user:pass@]host:port
+	const urlPattern =
+		/^(socks[45]?|https?|mtproto):\/\/(?:([^:]+):([^@]+)@)?([^:]+):(\d+)$/i;
+	const urlMatch = str.match(urlPattern);
 
-    if (urlMatch) {
-        return {
-            type: urlMatch[1].toLowerCase(),
-            username: urlMatch[2] || '',
-            password: urlMatch[3] || '',
-            host: urlMatch[4],
-            port: parseInt(urlMatch[5])
-        };
-    }
+	if (urlMatch) {
+		return {
+			type: urlMatch[1].toLowerCase(),
+			username: urlMatch[2] || "",
+			password: urlMatch[3] || "",
+			host: urlMatch[4],
+			port: parseInt(urlMatch[5], 10),
+		};
+	}
 
-    // Simple format: host:port
-    const simplePattern = /^([^:]+):(\d+)$/;
-    const simpleMatch = str.match(simplePattern);
+	// Simple format: host:port
+	const simplePattern = /^([^:]+):(\d+)$/;
+	const simpleMatch = str.match(simplePattern);
 
-    if (simpleMatch) {
-        return {
-            type: 'socks5',
-            username: '',
-            password: '',
-            host: simpleMatch[1],
-            port: parseInt(simpleMatch[2])
-        };
-    }
+	if (simpleMatch) {
+		return {
+			type: "socks5",
+			username: "",
+			password: "",
+			host: simpleMatch[1],
+			port: parseInt(simpleMatch[2], 10),
+		};
+	}
 
-    // IP:PORT:USER:PASS format
-    const detailedPattern = /^([^:]+):(\d+):([^:]+):(.+)$/;
-    const detailedMatch = str.match(detailedPattern);
+	// IP:PORT:USER:PASS format
+	const detailedPattern = /^([^:]+):(\d+):([^:]+):(.+)$/;
+	const detailedMatch = str.match(detailedPattern);
 
-    if (detailedMatch) {
-        return {
-            type: 'socks5',
-            host: detailedMatch[1],
-            port: parseInt(detailedMatch[2]),
-            username: detailedMatch[3],
-            password: detailedMatch[4]
-        };
-    }
+	if (detailedMatch) {
+		return {
+			type: "socks5",
+			host: detailedMatch[1],
+			port: parseInt(detailedMatch[2], 10),
+			username: detailedMatch[3],
+			password: detailedMatch[4],
+		};
+	}
 
-    return null;
+	return null;
 }
 
 /**
  * Get all proxies
  */
 export function getAllProxies() {
-    return proxies.getAll();
+	return proxies.getAll();
 }
 
 /**
  * Get active proxies only
  */
 export function getActiveProxies() {
-    return proxies.getActive();
+	return proxies.getActive();
 }
 
 /**
  * Get proxy count
  */
 export function getProxyCount() {
-    return proxies.count();
+	return proxies.count();
 }
 
 /**
  * Get a random active proxy
  */
 export function getRandomProxy() {
-    return proxies.getRandom();
+	return proxies.getRandom();
 }
 
 /**
  * Get proxy by ID
  */
 export function getProxyById(id) {
-    return proxies.getById(id);
+	return proxies.getById(id);
 }
 
 /**
  * Toggle proxy active state
  */
 export function toggleProxy(id, isActive) {
-    proxies.toggle(id, isActive);
+	proxies.toggle(id, isActive);
 }
 
 /**
  * Delete proxy
  */
 export function deleteProxy(id) {
-    proxies.delete(id);
+	proxies.delete(id);
 }
 
 /**
  * Delete all proxies
  */
 export function deleteAllProxies() {
-    proxies.deleteAll();
+	proxies.deleteAll();
 }
 
 // ==================== PROXY TESTING ====================
@@ -176,57 +186,57 @@ export function deleteAllProxies() {
  * @returns {Promise<{success: boolean, latency?: number, error?: string}>}
  */
 export async function testProxy(proxy) {
-    const startTime = Date.now();
+	const startTime = Date.now();
 
-    try {
-        // Create a simple SOCKS agent for testing
-        const { SocksProxyAgent } = await import('socks-proxy-agent');
+	try {
+		// Create a simple SOCKS agent for testing
+		const { SocksProxyAgent } = await import("socks-proxy-agent");
 
-        const proxyUrl = proxy.username
-            ? `${proxy.type}://${proxy.username}:${proxy.password}@${proxy.host}:${proxy.port}`
-            : `${proxy.type}://${proxy.host}:${proxy.port}`;
+		const proxyUrl = proxy.username
+			? `${proxy.type}://${proxy.username}:${proxy.password}@${proxy.host}:${proxy.port}`
+			: `${proxy.type}://${proxy.host}:${proxy.port}`;
 
-        const agent = new SocksProxyAgent(proxyUrl);
+		const agent = new SocksProxyAgent(proxyUrl);
 
-        // Try to connect to Telegram API
-        const response = await fetch('https://api.telegram.org/', {
-            method: 'HEAD',
-            agent,
-            timeout: 10000
-        });
+		// Try to connect to Telegram API
+		const response = await fetch("https://api.telegram.org/", {
+			method: "HEAD",
+			agent,
+			timeout: 10000,
+		});
 
-        const latency = Date.now() - startTime;
+		const latency = Date.now() - startTime;
 
-        return {
-            success: response.ok,
-            latency
-        };
-    } catch (error) {
-        return {
-            success: false,
-            error: error.message
-        };
-    }
+		return {
+			success: response.ok,
+			latency,
+		};
+	} catch (error) {
+		return {
+			success: false,
+			error: error.message,
+		};
+	}
 }
 
 /**
  * Test all proxies and return results
  */
 export async function testAllProxies() {
-    const allProxies = getAllProxies();
-    const results = [];
+	const allProxies = getAllProxies();
+	const results = [];
 
-    for (const proxy of allProxies) {
-        const result = await testProxy(proxy);
-        results.push({
-            id: proxy.id,
-            host: proxy.host,
-            port: proxy.port,
-            ...result
-        });
-    }
+	for (const proxy of allProxies) {
+		const result = await testProxy(proxy);
+		results.push({
+			id: proxy.id,
+			host: proxy.host,
+			port: proxy.port,
+			...result,
+		});
+	}
 
-    return results;
+	return results;
 }
 
 // ==================== PROXY FORMATTING ====================
@@ -235,28 +245,28 @@ export async function testAllProxies() {
  * Format proxy for GramJS/Telethon
  */
 export function formatProxyForClient(proxy) {
-    if (!proxy) return null;
+	if (!proxy) return null;
 
-    return {
-        ip: proxy.host,
-        port: proxy.port,
-        socksType: proxy.type === 'socks4' ? 4 : 5,
-        username: proxy.username || undefined,
-        password: proxy.password || undefined
-    };
+	return {
+		ip: proxy.host,
+		port: proxy.port,
+		socksType: proxy.type === "socks4" ? 4 : 5,
+		username: proxy.username || undefined,
+		password: proxy.password || undefined,
+	};
 }
 
 /**
  * Format proxy for display
  */
 export function formatProxyForDisplay(proxy) {
-    if (!proxy) return 'بدون پروکسی';
+	if (!proxy) return "بدون پروکسی";
 
-    let str = `${proxy.type}://${proxy.host}:${proxy.port}`;
-    if (proxy.username) {
-        str = `${proxy.type}://${proxy.username}:***@${proxy.host}:${proxy.port}`;
-    }
-    return str;
+	let str = `${proxy.type}://${proxy.host}:${proxy.port}`;
+	if (proxy.username) {
+		str = `${proxy.type}://${proxy.username}:***@${proxy.host}:${proxy.port}`;
+	}
+	return str;
 }
 
 // ==================== STATISTICS ====================
@@ -265,39 +275,45 @@ export function formatProxyForDisplay(proxy) {
  * Get proxy statistics
  */
 export function getProxyStats() {
-    const all = getAllProxies();
-    const active = getActiveProxies();
+	const all = getAllProxies();
+	const active = getActiveProxies();
 
-    return {
-        total: all.length,
-        active: active.length,
-        inactive: all.length - active.length,
-        byType: all.reduce((acc, p) => {
-            acc[p.type] = (acc[p.type] || 0) + 1;
-            return acc;
-        }, {})
-    };
+	return {
+		total: all.length,
+		active: active.length,
+		inactive: all.length - active.length,
+		byType: all.reduce((acc, p) => {
+			acc[p.type] = (acc[p.type] || 0) + 1;
+			return acc;
+		}, {}),
+	};
 }
 
 export default {
-    PROXY_TYPES,
-    addProxy,
-    addProxiesFromText,
-    getAllProxies,
-    getActiveProxies,
-    getProxyCount,
-    getRandomProxy,
-    getProxyById,
-    toggleProxy,
-    deleteProxy,
-    deleteAllProxies,
-    testProxy,
-    testAllProxies,
-    formatProxyForClient,
-    formatProxyForDisplay,
-    getProxyStats,
-    startAutoScraper: (interval) => import('./proxy-scraper.service.js').then(m => m.startAutoScraper(interval)),
-    stopAutoScraper: () => import('./proxy-scraper.service.js').then(m => m.stopAutoScraper()),
-    getScraperStatus: () => import('./proxy-scraper.service.js').then(m => m.getStatus()),
-    scrapeProxies: () => import('./proxy-scraper.service.js').then(m => m.scrapeProxies())
+	PROXY_TYPES,
+	addProxy,
+	addProxiesFromText,
+	getAllProxies,
+	getActiveProxies,
+	getProxyCount,
+	getRandomProxy,
+	getProxyById,
+	toggleProxy,
+	deleteProxy,
+	deleteAllProxies,
+	testProxy,
+	testAllProxies,
+	formatProxyForClient,
+	formatProxyForDisplay,
+	getProxyStats,
+	startAutoScraper: (interval) =>
+		import("./proxy-scraper.service.js").then((m) =>
+			m.startAutoScraper(interval),
+		),
+	stopAutoScraper: () =>
+		import("./proxy-scraper.service.js").then((m) => m.stopAutoScraper()),
+	getScraperStatus: () =>
+		import("./proxy-scraper.service.js").then((m) => m.getStatus()),
+	scrapeProxies: () =>
+		import("./proxy-scraper.service.js").then((m) => m.scrapeProxies()),
 };

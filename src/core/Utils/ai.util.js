@@ -1,52 +1,52 @@
-import fetch from 'node-fetch';
-import { CONFIG } from '../../core/Config/app.config.js';
+import fetch from "node-fetch";
 
 /**
  * THE AI ORACLE CORE v4.0 — SUPREME REWRITE
  * Powered by Google Gemini (Gemma 3)
- * 
+ *
  * Complete rewrite with institutional-grade valuation prompt.
  * Fixes: template interpolation, pricing calibration, reasoning quality.
  */
 export const AI_ORACLE = {
+	/**
+	 * Consult the AI for a valuation
+	 * @param {string} username - The username to appraise (e.g. "crypto")
+	 * @param {number} tonPrice - Current TON price
+	 * @param {Object} marketContext - Known market data
+	 */
+	async consult(username, _tonPrice, marketContext = {}) {
+		const cleanName = username.replace("@", "").toLowerCase().trim();
+		const len = cleanName.length;
+		const apiKey = process.env.GEMINI_API_KEY;
 
-    /**
-     * Consult the AI for a valuation
-     * @param {string} username - The username to appraise (e.g. "crypto")
-     * @param {number} tonPrice - Current TON price
-     * @param {Object} marketContext - Known market data
-     */
-    async consult(username, tonPrice, marketContext = {}) {
-        const cleanName = username.replace('@', '').toLowerCase().trim();
-        const len = cleanName.length;
-        const apiKey = process.env.GEMINI_API_KEY;
+		if (!apiKey) {
+			console.error("❌ Missing GEMINI_API_KEY in .env");
+			return null;
+		}
 
-        if (!apiKey) {
-            console.error('❌ Missing GEMINI_API_KEY in .env');
-            return null;
-        }
+		console.log(`🧠 AI Oracle v4.0: Analyzing @${cleanName} (${len} chars)...`);
 
-        console.log(`🧠 AI Oracle v4.0: Analyzing @${cleanName} (${len} chars)...`);
+		// ═══════════════════════════════════════════════════════════
+		// BUILD CONTEXT-AWARE PROMPT
+		// ═══════════════════════════════════════════════════════════
 
-        // ═══════════════════════════════════════════════════════════
-        // BUILD CONTEXT-AWARE PROMPT
-        // ═══════════════════════════════════════════════════════════
+		const lastSaleInfo =
+			marketContext.lastSalePrice && marketContext.lastSalePrice !== "None"
+				? `${marketContext.lastSalePrice} TON`
+				: "No record";
 
-        const lastSaleInfo = marketContext.lastSalePrice && marketContext.lastSalePrice !== 'None'
-            ? `${marketContext.lastSalePrice} TON`
-            : 'No record';
+		const statusInfo = marketContext.status || "Unknown";
 
-        const statusInfo = marketContext.status || 'Unknown';
+		const similarInfo =
+			marketContext.similarExamples && marketContext.similarExamples.length > 0
+				? `\nSIMILAR SOLD NAMES: ${marketContext.similarExamples.slice(0, 3).join(", ")}`
+				: "";
 
-        const similarInfo = marketContext.similarExamples && marketContext.similarExamples.length > 0
-            ? `\nSIMILAR SOLD NAMES: ${marketContext.similarExamples.slice(0, 3).join(', ')}`
-            : '';
+		const floorInfo = marketContext.floorPrice
+			? `\nFLOOR FOR ${len}-CHAR NAMES: ~${Math.round(marketContext.floorPrice)} TON`
+			: "";
 
-        const floorInfo = marketContext.floorPrice
-            ? `\nFLOOR FOR ${len}-CHAR NAMES: ~${Math.round(marketContext.floorPrice)} TON`
-            : '';
-
-        const oraclePrompt = `You are FragmentOracle™ — the world's #1 Telegram username appraiser. You provide institutional-grade financial valuations for Fragment.com usernames.
+		const oraclePrompt = `You are FragmentOracle™ — the world's #1 Telegram username appraiser. You provide institutional-grade financial valuations for Fragment.com usernames.
 
 ═══ PLATFORM RULES ═══
 • 4-character usernames have a HARD FLOOR of 5,000 TON (Fragment minimum bid). ALL 4-char names ≥ 5,000 TON.
@@ -154,143 +154,168 @@ OUTPUT: {"analysis":{"verdict":"LIQUID","reasoning":"Creator Economy keyword. A 
 
 Now evaluate "@${cleanName}" (${len} chars). OUTPUT JSON ONLY:`;
 
-        // ═══════════════════════════════════════════════════════════
-        // API CALL WITH RETRY & MODEL ROTATION
-        // ═══════════════════════════════════════════════════════════
+		// ═══════════════════════════════════════════════════════════
+		// API CALL WITH RETRY & MODEL ROTATION
+		// ═══════════════════════════════════════════════════════════
 
-        const MAX_RETRIES = 3;
-        const MODELS = ['gemma-3-27b-it', 'gemma-3-12b-it'];
+		const MAX_RETRIES = 3;
+		const MODELS = ["gemma-3-27b-it", "gemma-3-12b-it"];
 
-        for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-            try {
-                const model = MODELS[attempt % MODELS.length];
-                console.log(`🔌 Attempt ${attempt + 1}/${MAX_RETRIES}: ${model}...`);
+		for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+			try {
+				const model = MODELS[attempt % MODELS.length];
+				console.log(`🔌 Attempt ${attempt + 1}/${MAX_RETRIES}: ${model}...`);
 
-                const baseUrl = process.env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com';
-                const url = `${baseUrl}/v1beta/models/${model}:generateContent?key=${apiKey}`;
+				const baseUrl =
+					process.env.GEMINI_BASE_URL ||
+					"https://generativelanguage.googleapis.com";
+				const url = `${baseUrl}/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-                const payload = {
-                    contents: [{
-                        parts: [{ text: oraclePrompt }]
-                    }],
-                    generationConfig: {
-                        temperature: 0.2,
-                        maxOutputTokens: 1024,
-                    }
-                };
+				const payload = {
+					contents: [
+						{
+							parts: [{ text: oraclePrompt }],
+						},
+					],
+					generationConfig: {
+						temperature: 0.2,
+						maxOutputTokens: 1024,
+					},
+				};
 
-                const options = {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
-                    timeout: 30000
-                };
+				const options = {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify(payload),
+					timeout: 30000,
+				};
 
-                if (process.env.HTTPS_PROXY) {
-                    const { HttpsProxyAgent } = await import('https-proxy-agent');
-                    options.agent = new HttpsProxyAgent(process.env.HTTPS_PROXY);
-                }
+				if (process.env.HTTPS_PROXY) {
+					const { HttpsProxyAgent } = await import("https-proxy-agent");
+					options.agent = new HttpsProxyAgent(process.env.HTTPS_PROXY);
+				}
 
-                const response = await fetch(url, options);
+				const response = await fetch(url, options);
 
-                if (!response.ok) {
-                    const errText = await response.text();
-                    if (response.status === 503 || response.status === 429) {
-                        console.warn(`⚠️ API ${response.status} (Attempt ${attempt + 1}): Retrying in 2s...`);
-                        await new Promise(r => setTimeout(r, 2000));
-                        continue;
-                    }
-                    throw new Error(`API Error ${response.status}: ${errText.substring(0, 200)}`);
-                }
+				if (!response.ok) {
+					const errText = await response.text();
+					if (response.status === 503 || response.status === 429) {
+						console.warn(
+							`⚠️ API ${response.status} (Attempt ${attempt + 1}): Retrying in 2s...`,
+						);
+						await new Promise((r) => setTimeout(r, 2000));
+						continue;
+					}
+					throw new Error(
+						`API Error ${response.status}: ${errText.substring(0, 200)}`,
+					);
+				}
 
-                const data = await response.json();
+				const data = await response.json();
 
-                if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
-                    console.warn(`⚠️ Empty AI response (Attempt ${attempt + 1})`);
-                    continue;
-                }
+				if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
+					console.warn(`⚠️ Empty AI response (Attempt ${attempt + 1})`);
+					continue;
+				}
 
-                let text = data.candidates[0].content.parts[0].text.trim();
+				const text = data.candidates[0].content.parts[0].text.trim();
 
-                // ═══════════════════════════════════════════════
-                // ROBUST JSON EXTRACTION
-                // ═══════════════════════════════════════════════
+				// ═══════════════════════════════════════════════
+				// ROBUST JSON EXTRACTION
+				// ═══════════════════════════════════════════════
 
-                const result = this.extractJSON(text);
+				const result = this.extractJSON(text);
 
-                if (result && this.validateResult(result)) {
-                    console.log(`✅ AI Oracle Success (${model}): @${cleanName} → ${result.valuation?.ton?.toLocaleString()} TON`);
-                    return result;
-                }
+				if (result && this.validateResult(result)) {
+					console.log(
+						`✅ AI Oracle Success (${model}): @${cleanName} → ${result.valuation?.ton?.toLocaleString()} TON`,
+					);
+					return result;
+				}
 
-                console.warn(`⚠️ Invalid AI response structure (Attempt ${attempt + 1})`);
+				console.warn(
+					`⚠️ Invalid AI response structure (Attempt ${attempt + 1})`,
+				);
+			} catch (error) {
+				console.error(
+					`⚠️ AI Oracle Attempt ${attempt + 1} Failed:`,
+					error.message,
+				);
+				if (attempt < MAX_RETRIES - 1) {
+					await new Promise((r) => setTimeout(r, 1500));
+				}
+			}
+		}
 
-            } catch (error) {
-                console.error(`⚠️ AI Oracle Attempt ${attempt + 1} Failed:`, error.message);
-                if (attempt < MAX_RETRIES - 1) {
-                    await new Promise(r => setTimeout(r, 1500));
-                }
-            }
-        }
+		console.error(
+			`❌ AI Oracle: All ${MAX_RETRIES} attempts failed for @${cleanName}`,
+		);
+		return null; // Fallback to heuristic engine
+	},
 
-        console.error(`❌ AI Oracle: All ${MAX_RETRIES} attempts failed for @${cleanName}`);
-        return null; // Fallback to heuristic engine
-    },
+	/**
+	 * Extract JSON from AI response text (handles markdown fences, extra text, etc.)
+	 */
+	extractJSON(text) {
+		// Strategy 1: Direct parse (ideal case)
+		try {
+			return JSON.parse(text);
+		} catch (_e) {
+			/* continue */
+		}
 
-    /**
-     * Extract JSON from AI response text (handles markdown fences, extra text, etc.)
-     */
-    extractJSON(text) {
-        // Strategy 1: Direct parse (ideal case)
-        try {
-            return JSON.parse(text);
-        } catch (e) { /* continue */ }
+		// Strategy 2: Extract from ```json ... ``` code block
+		const jsonBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+		if (jsonBlockMatch) {
+			try {
+				return JSON.parse(jsonBlockMatch[1].trim());
+			} catch (_e) {
+				/* continue */
+			}
+		}
 
-        // Strategy 2: Extract from ```json ... ``` code block
-        const jsonBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-        if (jsonBlockMatch) {
-            try {
-                return JSON.parse(jsonBlockMatch[1].trim());
-            } catch (e) { /* continue */ }
-        }
+		// Strategy 3: Find first { ... } block
+		const firstBrace = text.indexOf("{");
+		const lastBrace = text.lastIndexOf("}");
+		if (firstBrace !== -1 && lastBrace > firstBrace) {
+			try {
+				return JSON.parse(text.substring(firstBrace, lastBrace + 1));
+			} catch (_e) {
+				/* continue */
+			}
+		}
 
-        // Strategy 3: Find first { ... } block
-        const firstBrace = text.indexOf('{');
-        const lastBrace = text.lastIndexOf('}');
-        if (firstBrace !== -1 && lastBrace > firstBrace) {
-            try {
-                return JSON.parse(text.substring(firstBrace, lastBrace + 1));
-            } catch (e) { /* continue */ }
-        }
+		// Strategy 4: Clean common issues (trailing commas, single quotes)
+		try {
+			const cleaned = text
+				.replace(/```json\s*/g, "")
+				.replace(/```\s*/g, "")
+				.replace(/,\s*}/g, "}")
+				.replace(/,\s*]/g, "]")
+				.trim();
 
-        // Strategy 4: Clean common issues (trailing commas, single quotes)
-        try {
-            let cleaned = text
-                .replace(/```json\s*/g, '')
-                .replace(/```\s*/g, '')
-                .replace(/,\s*}/g, '}')
-                .replace(/,\s*]/g, ']')
-                .trim();
+			const fb = cleaned.indexOf("{");
+			const lb = cleaned.lastIndexOf("}");
+			if (fb !== -1 && lb > fb) {
+				return JSON.parse(cleaned.substring(fb, lb + 1));
+			}
+		} catch (_e) {
+			/* give up */
+		}
 
-            const fb = cleaned.indexOf('{');
-            const lb = cleaned.lastIndexOf('}');
-            if (fb !== -1 && lb > fb) {
-                return JSON.parse(cleaned.substring(fb, lb + 1));
-            }
-        } catch (e) { /* give up */ }
+		console.error("❌ JSON extraction failed from AI response");
+		return null;
+	},
 
-        console.error('❌ JSON extraction failed from AI response');
-        return null;
-    },
-
-    /**
-     * Validate the structure of AI response
-     */
-    validateResult(result) {
-        if (!result) return false;
-        if (!result.analysis?.verdict) return false;
-        if (!result.valuation?.ton || typeof result.valuation.ton !== 'number') return false;
-        if (result.valuation.ton <= 0) return false;
-        return true;
-    }
+	/**
+	 * Validate the structure of AI response
+	 */
+	validateResult(result) {
+		if (!result) return false;
+		if (!result.analysis?.verdict) return false;
+		if (!result.valuation?.ton || typeof result.valuation.ton !== "number")
+			return false;
+		if (result.valuation.ton <= 0) return false;
+		return true;
+	},
 };

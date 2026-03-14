@@ -1,5 +1,4 @@
-
-import { getBrowser } from '../../../Shared/UI/Components/card-generator.component.js';
+import { getBrowser } from "../../../Shared/UI/Components/card-generator.component.js";
 
 /**
  * Generates a premium "Profile Card" image for the /me command.
@@ -7,19 +6,26 @@ import { getBrowser } from '../../../Shared/UI/Components/card-generator.compone
  * @returns {Promise<Buffer>} - The generated image buffer.
  */
 export async function generateProfileCard(data) {
-    console.log('👑 Generating Premium Profile Card...');
-    const browser = await getBrowser();
-    let page = null;
+	console.log("👑 Generating Premium Profile Card...");
+	const browser = await getBrowser();
+	let page = null;
 
-    try {
-        page = await browser.newPage();
-        await page.setViewport({ width: 1200, height: 630, deviceScaleFactor: 2 }); // 1.91:1 ratio good for telegram
+	try {
+		page = await browser.newPage();
+		await page.setViewport({ width: 1200, height: 630, deviceScaleFactor: 2 }); // 1.91:1 ratio good for telegram
 
-        // Calculate some values for the card
-        const totalValue = data.totalValueUsd.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
-        const joinDate = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }); // Mock or real if available
+		// Calculate some values for the card
+		const totalValue = data.totalValueUsd.toLocaleString("en-US", {
+			style: "currency",
+			currency: "USD",
+			maximumFractionDigits: 0,
+		});
+		const _joinDate = new Date().toLocaleDateString("en-US", {
+			month: "long",
+			year: "numeric",
+		}); // Mock or real if available
 
-        const htmlContent = `
+		const htmlContent = `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -213,26 +219,26 @@ export async function generateProfileCard(data) {
 
         <div class="right-section profile-pic-container">
             <!-- Using a solid placeholder if no pfp, or the actual pfp url -->
-             ${data.photoUrl
-                ? `<img src="${data.photoUrl}" class="profile-pic" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIiBmaWxsPSIjMzMzIj48Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI1MCIvPjwvc3ZnPg=='">`
-                : `<div class="profile-pic" style="background: #333; display: flex; align-items: center; justify-content: center; font-size: 80px;">👤</div>`
-            }
+             ${
+								data.photoUrl
+									? `<img src="${data.photoUrl}" class="profile-pic" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIiBmaWxsPSIjMzMzIj48Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI1MCIvPjwvc3ZnPg=='">`
+									: `<div class="profile-pic" style="background: #333; display: flex; align-items: center; justify-content: center; font-size: 80px;">👤</div>`
+							}
         </div>
     </div>
 </body>
 </html>
         `;
 
-        await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+		await page.setContent(htmlContent, { waitUntil: "networkidle0" });
 
-        // Screenshot
-        const buffer = await page.screenshot({ type: 'png' });
-        return buffer;
-
-    } catch (error) {
-        console.error('Error generating Profile Card:', error);
-        throw error;
-    } finally {
-        if (page) await page.close();
-    }
+		// Screenshot
+		const buffer = await page.screenshot({ type: "png" });
+		return buffer;
+	} catch (error) {
+		console.error("Error generating Profile Card:", error);
+		throw error;
+	} finally {
+		if (page) await page.close();
+	}
 }

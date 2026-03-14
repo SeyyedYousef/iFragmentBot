@@ -1,4 +1,4 @@
-# iFragmentBot - Telegram Fragment Username Analyzer
+﻿# iFragmentBot - Telegram Fragment Username Analyzer
 
 ## 🚀 Quick Start
 
@@ -55,9 +55,22 @@ Click the button below any analysis to see all assets
 
 - Node.js + Telegraf
 - Puppeteer-core for scraping
+- Scrapling (Python) bridge for stealth scraping
 - Pollinations AI for taglines
 - MongoDB for analytics (optional)
+
+## Scrapling Setup
+
+The Scrapling pathway keeps Fragment scraping stable even when Puppeteer is blocked. To enable it:
+
+1. Install Python 3.10+ with `pip`.
+2. Run `pip install scrapling`.
+3. (Optional) Set `SCRAPLING_PYTHON` if your Python executable is not called `python`.
+
+The bot calls `scripts/scrapling_fragment.py` before falling back to Puppeteer. If Scrapling is missing, it logs a warning and continues with legacy scraping.
 
 ## 📄 License
 
 MIT
+
+

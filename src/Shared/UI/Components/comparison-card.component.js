@@ -4,7 +4,7 @@
  * Extracted from bot.entry.js to reduce monolith size.
  */
 
-import { getPage } from './card-generator.component.js';
+import { getPage } from "./card-generator.component.js";
 
 /**
  * Generate a comparison card image between two usernames.
@@ -12,16 +12,16 @@ import { getPage } from './card-generator.component.js';
  * @returns {Buffer} PNG image buffer
  */
 export async function generateComparisonCard(data) {
-    const winner = data.value1 >= data.value2 ? 1 : 2;
+	const winner = data.value1 >= data.value2 ? 1 : 2;
 
-    // Format numbers for display
-    const formatNumber = (num) => {
-        if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-        if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
-        return num.toLocaleString();
-    };
+	// Format numbers for display
+	const formatNumber = (num) => {
+		if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
+		if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
+		return num.toLocaleString();
+	};
 
-    const html = `
+	const html = `
     <!DOCTYPE html>
     <html>
     <head>
@@ -185,7 +185,7 @@ export async function generateComparisonCard(data) {
             </div>
             
             <div class="battle-arena">
-                <div class="fighter-card ${winner === 1 ? 'winner' : ''}">
+                <div class="fighter-card ${winner === 1 ? "winner" : ""}">
                     ${winner === 1 ? '<div class="crown">👑</div>' : '<div style="height: 68px"></div>'}
                     <div class="username u1">@${data.username1}</div>
                     
@@ -200,7 +200,7 @@ export async function generateComparisonCard(data) {
                 
                 <div class="vs-badge">VS</div>
                 
-                <div class="fighter-card ${winner === 2 ? 'winner' : ''}">
+                <div class="fighter-card ${winner === 2 ? "winner" : ""}">
                     ${winner === 2 ? '<div class="crown">👑</div>' : '<div style="height: 68px"></div>'}
                     <div class="username u2">@${data.username2}</div>
                     
@@ -220,17 +220,17 @@ export async function generateComparisonCard(data) {
     </html>
     `;
 
-    const page = await getPage();
-    await page.setContent(html, { waitUntil: 'networkidle0' });
-    await page.setViewport({ width: 1080, height: 1080 });
+	const page = await getPage();
+	await page.setContent(html, { waitUntil: "networkidle0" });
+	await page.setViewport({ width: 1080, height: 1080 });
 
-    // Wait for fonts to load
-    await page.evaluateHandle('document.fonts.ready');
-    await new Promise(r => setTimeout(r, 500));
+	// Wait for fonts to load
+	await page.evaluateHandle("document.fonts.ready");
+	await new Promise((r) => setTimeout(r, 500));
 
-    const imageBuffer = await page.screenshot({ type: 'png' });
-    await page.close();
-    return imageBuffer;
+	const imageBuffer = await page.screenshot({ type: "png" });
+	await page.close();
+	return imageBuffer;
 }
 
 export default { generateComparisonCard };

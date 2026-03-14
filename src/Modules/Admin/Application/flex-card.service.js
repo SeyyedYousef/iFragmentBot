@@ -1,5 +1,4 @@
-
-import { getBrowser } from '../../../Shared/UI/Components/card-generator.component.js';
+import { getBrowser } from "../../../Shared/UI/Components/card-generator.component.js";
 
 /**
  * Generates a premium "Flex Card" image for the given gift.
@@ -7,56 +6,58 @@ import { getBrowser } from '../../../Shared/UI/Components/card-generator.compone
  * @returns {Promise<Buffer>} - The generated image buffer.
  */
 export async function generateFlexCard(giftData) {
-    console.log('🎁 Generating Gift Flex Card...');
-    console.log('📦 giftData:', JSON.stringify(giftData, null, 2));
+	console.log("🎁 Generating Gift Flex Card...");
+	console.log("📦 giftData:", JSON.stringify(giftData, null, 2));
 
-    const browser = await getBrowser();
+	const browser = await getBrowser();
 
-    const backdropColors = {
-        'Sky': '#00BFFF',
-        'Sapphire': '#0F52BA',
-        'Midnight': '#191970', // Deep blue, maybe too dark for glow, let's use lighter
-        'Violet': '#8A2BE2',
-        'Purple': '#800080',
-        'Mint': '#98FF98',
-        'Emerald': '#50C878',
-        'Gold': '#FFD700',
-        'Amber': '#FFBF00',
-        'Red': '#FF0000',
-        'Ruby': '#E0115F',
-        'Black': '#FFFFFF', // White glow for black
-        'Onyx': '#353839',  // Dark grey
-        'White': '#FFFFFF',
-        'Pink': '#FFC0CB',
-        'Plasma': '#FF00FF',
-        'Neon': '#39FF14'
-    };
+	const backdropColors = {
+		Sky: "#00BFFF",
+		Sapphire: "#0F52BA",
+		Midnight: "#191970", // Deep blue, maybe too dark for glow, let's use lighter
+		Violet: "#8A2BE2",
+		Purple: "#800080",
+		Mint: "#98FF98",
+		Emerald: "#50C878",
+		Gold: "#FFD700",
+		Amber: "#FFBF00",
+		Red: "#FF0000",
+		Ruby: "#E0115F",
+		Black: "#FFFFFF", // White glow for black
+		Onyx: "#353839", // Dark grey
+		White: "#FFFFFF",
+		Pink: "#FFC0CB",
+		Plasma: "#FF00FF",
+		Neon: "#39FF14",
+	};
 
-    // Determine color
-    let primaryColor = '#0088cc';
-    if (giftData.color) {
-        // Try direct match
-        if (backdropColors[giftData.color]) primaryColor = backdropColors[giftData.color];
-        // Try partial match
-        else {
-            const lower = giftData.color.toLowerCase();
-            if (lower.includes('blue')) primaryColor = '#0088cc';
-            else if (lower.includes('red')) primaryColor = '#ff4444';
-            else if (lower.includes('green')) primaryColor = '#00ff88';
-            else if (lower.includes('gold') || lower.includes('yellow')) primaryColor = '#ffd700';
-            else if (lower.includes('purple')) primaryColor = '#aa00ff';
-            else if (lower.includes('pink')) primaryColor = '#ff6bcb';
-        }
-    }
+	// Determine color
+	let primaryColor = "#0088cc";
+	if (giftData.color) {
+		// Try direct match
+		if (backdropColors[giftData.color])
+			primaryColor = backdropColors[giftData.color];
+		// Try partial match
+		else {
+			const lower = giftData.color.toLowerCase();
+			if (lower.includes("blue")) primaryColor = "#0088cc";
+			else if (lower.includes("red")) primaryColor = "#ff4444";
+			else if (lower.includes("green")) primaryColor = "#00ff88";
+			else if (lower.includes("gold") || lower.includes("yellow"))
+				primaryColor = "#ffd700";
+			else if (lower.includes("purple")) primaryColor = "#aa00ff";
+			else if (lower.includes("pink")) primaryColor = "#ff6bcb";
+		}
+	}
 
-    let page = null;
+	let page = null;
 
-    try {
-        page = await browser.newPage();
-        await page.setViewport({ width: 1080, height: 1080, deviceScaleFactor: 1 });
+	try {
+		page = await browser.newPage();
+		await page.setViewport({ width: 1080, height: 1080, deviceScaleFactor: 1 });
 
-        // Premium Story Card Template (1080x1080)
-        const htmlContent = `
+		// Premium Story Card Template (1080x1080)
+		const htmlContent = `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -294,7 +295,7 @@ export async function generateFlexCard(giftData) {
                     <div class="verdict-group">
                         <div class="verdict-text">${giftData.verdict}</div>
                         <div class="badges">
-                            ${(giftData.badges || []).map(b => `<div class="badge">${b}</div>`).join('')}
+                            ${(giftData.badges || []).map((b) => `<div class="badge">${b}</div>`).join("")}
                         </div>
                     </div>
                 </div>
@@ -308,38 +309,41 @@ export async function generateFlexCard(giftData) {
 </html>
         `;
 
-        await page.setContent(htmlContent, { waitUntil: 'domcontentloaded', timeout: 60000 });
+		await page.setContent(htmlContent, {
+			waitUntil: "domcontentloaded",
+			timeout: 60000,
+		});
 
-        // Wait for Lottie animation to load
-        try {
-            await page.waitForFunction(
-                () => {
-                    const lottie = document.querySelector('lottie-player');
-                    return lottie && lottie.shadowRoot && lottie.shadowRoot.querySelector('svg');
-                },
-                { timeout: 15000 }
-            );
-            // Give extra time for animation to render first frame
-            await new Promise(r => setTimeout(r, 2000));
-            console.log('✅ Gift animation loaded successfully');
-        } catch (imgErr) {
-            console.warn('⚠️ Lottie animation failed to load, continuing anyway...');
-        }
+		// Wait for Lottie animation to load
+		try {
+			await page.waitForFunction(
+				() => {
+					const lottie = document.querySelector("lottie-player");
+					return lottie?.shadowRoot?.querySelector("svg");
+				},
+				{ timeout: 15000 },
+			);
+			// Give extra time for animation to render first frame
+			await new Promise((r) => setTimeout(r, 2000));
+			console.log("✅ Gift animation loaded successfully");
+		} catch (_imgErr) {
+			console.warn("⚠️ Lottie animation failed to load, continuing anyway...");
+		}
 
-        console.log('📸 Taking screenshot...');
-        const buffer = await page.screenshot({ type: 'png' });
+		console.log("📸 Taking screenshot...");
+		const buffer = await page.screenshot({ type: "png" });
 
-        // Validate buffer
-        if (!buffer || buffer.length === 0) {
-            throw new Error('Screenshot buffer is empty');
-        }
-        console.log(`✅ Screenshot taken, buffer size: ${buffer.length} bytes`);
+		// Validate buffer
+		if (!buffer || buffer.length === 0) {
+			throw new Error("Screenshot buffer is empty");
+		}
+		console.log(`✅ Screenshot taken, buffer size: ${buffer.length} bytes`);
 
-        return buffer;
-    } catch (error) {
-        console.error('Error generating Flex Card:', error);
-        throw error;
-    } finally {
-        if (page) await page.close();
-    }
+		return buffer;
+	} catch (error) {
+		console.error("Error generating Flex Card:", error);
+		throw error;
+	} finally {
+		if (page) await page.close();
+	}
 }

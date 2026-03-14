@@ -495,7 +495,7 @@
             const headlineEl = document.getElementById('newsHeadline');
             if (headlineEl) {
                 const originalText = headlineEl.innerText;
-                const titleCaseText = originalText.toLowerCase().split(' ').map(function (word) {
+                const titleCaseText = originalText.toLowerCase().split(' ').map((word) => {
                     if (!word) return "";
                     return word.charAt(0).toUpperCase() + word.slice(1);
                 }).join(' ');
