@@ -738,11 +738,6 @@ async function initAndLaunch() {
 				fragmentData.lastSalePrice,
 				currentTonPrice,
 				fragmentData.status,
-				{
-					listingPrice: fragmentData.priceTon,
-					highestBid: fragmentData.highestBid,
-					minBid: fragmentData.minBid,
-				},
 			);
 			const rarity = await calculateRarity(username, estValue);
 

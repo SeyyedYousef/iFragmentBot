@@ -802,27 +802,17 @@ export class TheOracle {
 			);
 		}
 
-		const anchor = LIBRARY.getAnchor(lower);
-		const similarSales = LIBRARY.findSimilarSales(lower);
-		const marketBlend = TheOracle.getMarketBlend(
-			len,
-			externalContext,
-			anchor,
-			similarSales,
-		);
-
 		// ═══════════════════════════════════════════════════════════════════════════════════════════
 		// STEP 1: AI ORACLE (Hybrid Layer)
 		// ═══════════════════════════════════════════════════════════════════════════════════════════
 		try {
 			const { AI_ORACLE } = await import("../Utils/ai.util.js");
+			const anchor = LIBRARY.getAnchor(lower);
+			const similarSales = LIBRARY.findSimilarSales(lower); // NEW: Get real market stats
 			const mContext = {
 				status: externalContext.status || "Unknown",
 				lastSalePrice:
 					externalContext.lastSale || (anchor ? anchor.price : null),
-				listingPrice: externalContext.listingPrice || null,
-				highestBid: externalContext.highestBid || null,
-				minBid: externalContext.minBid || null,
 				floorPrice: LIBRARY.lengthStats.get(len)?.avg || 100,
 				similarMedian: similarSales ? similarSales.median : null,
 				similarExamples: similarSales ? similarSales.examples : [],
@@ -839,22 +829,12 @@ export class TheOracle {
 					// aiRes.similar.push('📌 4-Char Min Floor');
 				}
 
-				let aiTon = aiRes.valuation.ton;
-				if (marketBlend) {
-					aiTon = TheOracle.applyMarketBlend(
-						aiTon,
-						marketBlend,
-						aiRes.valuation.confidence,
-						len,
-					);
-				}
-
 				return {
-					ton: aiTon,
-					usd: Math.floor(aiTon * tonPrice),
+					ton: aiRes.valuation.ton,
+					usd: Math.floor(aiRes.valuation.ton * tonPrice),
 					rarity: {
-						tier: TheOracle.getTier(aiTon),
-						stars: TheOracle.getStars(aiTon),
+						tier: TheOracle.getTier(aiRes.valuation.ton),
+						stars: TheOracle.getStars(aiRes.valuation.ton),
 						label: aiRes.analysis.verdict,
 						score: aiRes.scores.rarity,
 					},
@@ -862,7 +842,7 @@ export class TheOracle {
 					confidence: aiRes.valuation.confidence,
 					aura: {
 						archetype: aiRes.aura?.archetype || aiRes.analysis.verdict,
-						color: TheOracle.getAuraColor(aiTon),
+						color: TheOracle.getAuraColor(aiRes.valuation.ton),
 						vibe: aiRes.aura?.vibe || aiRes.valuation.trend,
 					},
 					// AI Extensions
@@ -892,6 +872,9 @@ export class TheOracle {
 		let multipliers = 1.0;
 		let archetype = "Generic";
 		let confidence = 70;
+
+		const anchor = LIBRARY.getAnchor(lower);
+		const similarSales = LIBRARY.findSimilarSales(lower);
 
 		// ═══════════════════════════════════════════════════════════════════════════════════════════
 		// STEP 1: HISTORY & SIMILAR SALES CHECK (The Real Floor)
@@ -1211,14 +1194,6 @@ export class TheOracle {
 			}
 		}
 
-		if (marketBlend) {
-			finalTon = TheOracle.applyMarketBlend(
-				finalTon,
-				marketBlend,
-				confidence,
-				len,
-			);
-		}
 		finalTon = TheOracle.aestheticRound(finalTon);
 
 		return TheOracle.formatResult(
@@ -1322,74 +1297,6 @@ export class TheOracle {
 		if (price >= 10000) return "Valuable";
 		if (price >= 1000) return "Promising";
 		return "Standard";
-	}
-
-	static clamp(n, min, max) {
-		return Math.max(min, Math.min(max, n));
-	}
-
-	static getMarketBlend(len, externalContext, anchor, similarSales) {
-		const signals = [];
-		const lastSale = Number(externalContext?.lastSale);
-		if (Number.isFinite(lastSale) && lastSale > 0) {
-			signals.push({ value: lastSale, weight: 0.35 });
-		}
-		if (anchor?.price) {
-			signals.push({ value: anchor.price, weight: 0.45 });
-		}
-
-		const listingPrice = Number(externalContext?.listingPrice);
-		const highestBid = Number(externalContext?.highestBid);
-		const minBid = Number(externalContext?.minBid);
-		const status = String(externalContext?.status || "").toLowerCase();
-
-		let market = null;
-		if (Number.isFinite(listingPrice) && listingPrice > 0)
-			market = listingPrice;
-		else if (Number.isFinite(highestBid) && highestBid > 0) market = highestBid;
-		else if (Number.isFinite(minBid) && minBid > 0) market = minBid;
-
-		if (Number.isFinite(market)) {
-			let w = 0.25;
-			if (status === "on_auction") w = 0.4;
-			else if (status === "for_sale") w = 0.3;
-			signals.push({ value: market, weight: w });
-		}
-
-		if (Number.isFinite(similarSales?.median) && similarSales.median > 0) {
-			const w = similarSales.count >= 10 ? 0.3 : 0.2;
-			signals.push({ value: similarSales.median, weight: w });
-		}
-
-		if (signals.length === 0) return null;
-
-		const weightSum = signals.reduce((s, a) => s + a.weight, 0);
-		const weighted =
-			signals.reduce((s, a) => s + a.value * a.weight, 0) / weightSum;
-		const floor = len === 4 ? 5050 : 1;
-
-		return { value: Math.max(weighted, floor), signals };
-	}
-
-	static applyMarketBlend(ton, marketBlend, confidence, len) {
-		if (!marketBlend || !Number.isFinite(marketBlend.value)) return ton;
-
-		const market = marketBlend.value;
-		let marketWeight = 0.55;
-		if ((marketBlend.signals || []).length >= 3) marketWeight += 0.1;
-		if (confidence >= 85) marketWeight -= 0.1;
-		else if (confidence <= 60) marketWeight += 0.1;
-		marketWeight = TheOracle.clamp(marketWeight, 0.45, 0.75);
-
-		let blended = Math.round(ton * (1 - marketWeight) + market * marketWeight);
-
-		if (ton > market * 2) blended = Math.round(ton * 0.3 + market * 0.7);
-		else if (ton < market * 0.5) blended = Math.round(ton * 0.4 + market * 0.6);
-
-		if (len === 4 && blended < 5050) blended = 5050;
-		if (blended < 1) blended = 1;
-
-		return blended;
 	}
 
 	static formatResult(
@@ -1649,14 +1556,9 @@ export async function estimateValue(
 	lastSale = null,
 	tonPrice = CONFIG.LIVE_TON_PRICE,
 	status = "Unknown",
-	externalContext = {},
 ) {
 	// Pass real Fragment marketplace data as context so TheOracle can factor it in
-	const ctx = { lastSale, status };
-	if (externalContext && typeof externalContext === "object") {
-		Object.assign(ctx, externalContext);
-	}
-	return await TheOracle.consult(username, tonPrice, ctx);
+	return await TheOracle.consult(username, tonPrice, { lastSale, status });
 }
 
 // OPTIMIZED: Extract rarity from a previous estimateValue result, or compute fresh

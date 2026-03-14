@@ -53,16 +53,8 @@ export async function handleComparison(ctx, username1, username2) {
 
 		console.log("Calculating stats...");
 		const [estValue1, estValue2] = await Promise.all([
-			estimateValue(username1, data1.lastSalePrice, tonPrice, data1.status, {
-				listingPrice: data1.priceTon,
-				highestBid: data1.highestBid,
-				minBid: data1.minBid,
-			}),
-			estimateValue(username2, data2.lastSalePrice, tonPrice, data2.status, {
-				listingPrice: data2.priceTon,
-				highestBid: data2.highestBid,
-				minBid: data2.minBid,
-			}),
+			estimateValue(username1, data1.lastSalePrice, tonPrice, data1.status),
+			estimateValue(username2, data2.lastSalePrice, tonPrice, data2.status),
 		]);
 		const rarity1 = await calculateRarity(username1, estValue1);
 		const rarity2 = await calculateRarity(username2, estValue2);
