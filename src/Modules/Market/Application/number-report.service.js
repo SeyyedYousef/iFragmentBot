@@ -334,73 +334,66 @@ function analyzeNumberPattern(numberClean, globalFloor = 850) {
  * HTTP scrape Fragment number page
  */
 async function scrapeFragmentNumber(numberClean) {
-	const url = `https://fragment.com/number/${numberClean}`;
+	const isAnonymous = numberClean.startsWith("888");
+	const baseUrl = `https://fragment.com/number/${numberClean}`;
+	const searchUrl = `https://fragment.com/numbers?query=${numberClean}&filter=sold`;
+	
+	const urlToFetch = isAnonymous ? searchUrl : baseUrl;
+	let status = "available";
+	
 	try {
 		const payload = await scraplingService.scraplingFetchFragment(numberClean, {
 			type: "number",
+			url: urlToFetch,
+			wait: isAnonymous ? ".tm-table-grid" : ".tm-section-header-status",
 			timeoutMs: 30000,
 		});
 
 		if (!payload || !payload.html) {
-			return {
-				status: "unknown",
-				priceTon: null,
-				highestBid: null,
-				minBid: null,
-				url,
-			};
-		}
-
-		if (payload.status === 404) {
-			return { status: "not_found", priceTon: null, bidHistory: [] };
+			return { status: "unknown", priceTon: null, url: baseUrl };
 		}
 
 		const html = payload.html;
 
-		if (html.includes("Address unavailable") || html.includes("Number not found")) {
+		// 1. Check for specific "Not Found" indicators
+		if (
+			(html.includes("Address unavailable") || html.includes("Number not found") || html.includes("Auctions not found")) &&
+			html.includes("tm-empty-placeholder")
+		) {
+			// If we checked the sold filter for anonymous and still got empty, it's truly not minted
 			status = "not_found";
-		} else {
-			const statusMatch = html.match(
-				/tm-section-header-status[^>]*>\s*([^<]+)\s*</i,
-			);
-			if (statusMatch) {
-				const s = statusMatch[1].trim().toLowerCase();
-				if (s.includes("sold")) status = "sold";
-				else if (s.includes("auction")) status = "on_auction";
-				else if (s.includes("sale")) status = "for_sale";
-				else if (s.includes("available")) status = "available";
-			} else {
-				if (/sold/i.test(html)) status = "sold";
-				else if (/auction/i.test(html)) status = "on_auction";
-				else if (/for sale|sale/i.test(html)) status = "for_sale";
-				else if (/available/i.test(html)) status = "available";
-			}
+			return { status, priceTon: null, url: baseUrl };
 		}
 
+		// 2. Detect status from collectible page (tm-status-label) or search result table (tm-status)
+		if (html.includes("tm-status-sold") || html.includes("tm-status-label tm-status-sold") || html.includes(">Sold<")) {
+			status = "sold";
+		} else if (html.includes("tm-status-unavail") || html.includes("tm-status-label tm-status-unavail")) {
+			status = "available"; // Minted but not listed
+		} else if (html.includes("tm-status-on-auction") || html.includes("tm-status-label tm-status-on-auction") || html.includes(">On auction<")) {
+			status = "on_auction";
+		} else if (html.includes("tm-status-for-sale") || html.includes("tm-status-label tm-status-for-sale") || html.includes(">For sale<")) {
+			status = "for_sale";
+		}
+
+		// 3. Extract Price (TON)
 		const priceMatches = [
 			...html.matchAll(/icon-ton">([\d,]+(?:\.\d+)?)<\/div>/g),
 		];
 		const prices = priceMatches
 			.map((m) => safeNum(m[1], null))
 			.filter((p) => Number.isFinite(p) && p > 0);
+		
 		let priceTon = null;
 		if (prices.length > 0) priceTon = prices[0];
 
-		const highestBid =
-			status === "on_auction" && prices.length >= 1 ? prices[0] : null;
-		const minBid =
-			status === "on_auction" && prices.length >= 3 ? prices[2] : null;
+		const highestBid = status === "on_auction" && prices.length >= 1 ? prices[0] : null;
+		const minBid = status === "on_auction" && prices.length >= 3 ? prices[2] : null;
 
-		return { status, priceTon, highestBid, minBid, url };
+		return { status, priceTon, highestBid, minBid, url: baseUrl };
 	} catch (e) {
 		console.warn("⚠️ Fragment number scrape failed:", e.message);
-		return {
-			status: "unknown",
-			priceTon: null,
-			highestBid: null,
-			minBid: null,
-			url: `https://fragment.com/number/${numberClean}`,
-		};
+		return { status: "unknown", priceTon: null, url: baseUrl };
 	}
 }
 
@@ -634,13 +627,10 @@ export async function generateNumberReport(input, tonPrice = 5.5) {
 	const priceTon = scraped.priceTon;
 
 	// Check if the number is minted on Fragment
-	if (status === "not_found" || status === "unknown") {
-		// Double check: if it's unknown but we have no price and it's a direct fragment page, it's likely unminted
-		if (!priceTon && !scraped.highestBid) {
-			throw new Error(
-				"❌ این شماره هنوز در فرگمنت مینت (ضرب) نشده است!\n\nThis number is not yet minted on Fragment. Only numbers minted during the initial 2022 sale can be analyzed.",
-			);
-		}
+	if (status === "not_found") {
+		throw new Error(
+			"This number is not yet minted on Fragment. Only numbers minted during the initial 2022 sale can be analyzed.",
+		);
 	}
 
 	// Pattern analysis (passes the collection floor)
@@ -677,12 +667,12 @@ export async function generateNumberReport(input, tonPrice = 5.5) {
 
 	const url = `https://fragment.com/number/${numberClean}`;
 
-	let statusDisplay = "❓ Unknown";
+	let statusDisplay = "NOT LISTED";
 	if (status === "for_sale") statusDisplay = "💰 FOR SALE";
 	else if (status === "on_auction") statusDisplay = "🔨 ON AUCTION";
 	else if (status === "sold") statusDisplay = "✅ SOLD";
-	else if (status === "available") statusDisplay = "✨ Available";
-	else if (status === "not_found") statusDisplay = "❌ Not Found";
+	else if (status === "available") statusDisplay = "✨ AVAILABLE";
+	else if (status === "not_found") statusDisplay = "❌ NOT FOUND";
 
 	// Check registration (optional - may fail if no MTProto)
 	let registeredText = "⏳ Unknown";

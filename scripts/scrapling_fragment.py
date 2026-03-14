@@ -44,6 +44,15 @@ def main() -> None:
         action="store_true",
         help="Run the Chrome instance in headful mode for debugging.",
     )
+    parser.add_argument(
+        "--url",
+        help="Explicit URL to fetch instead of building one from item.",
+    )
+    parser.add_argument(
+        "--wait",
+        help="Optional CSS selector to wait for.",
+        default=".tm-section-header-status"
+    )
     args = parser.parse_args()
 
     item = (args.item or "").strip().lstrip("@").lower()
@@ -61,17 +70,19 @@ def main() -> None:
             exit_code=2,
         )
 
-    url = f"https://fragment.com/{args.type}/{item}"
+    url = args.url if args.url else f"https://fragment.com/{args.type}/{item}"
     options = {
         "headless": not args.headful,
         "network_idle": True,
         "disable_resources": True,
         "timeout": args.timeout,
-        "wait_selector": ".tm-section-header-status",
-        "wait_selector_state": "attached",
         "solve_cloudflare": True,
         "google_search": False,
     }
+
+    if args.wait:
+        options["wait_selector"] = args.wait
+        options["wait_selector_state"] = "attached"
 
     if args.proxy:
         options["proxy"] = args.proxy

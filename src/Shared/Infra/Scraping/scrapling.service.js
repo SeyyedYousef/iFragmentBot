@@ -33,6 +33,8 @@ export function scraplingFetchFragment(item, options = {}) {
 		timeoutMs = 45000,
 		headful = false,
 		killTimeoutMs = 70000,
+		url,
+		wait,
 	} = options;
 	const args = [
 		SCRIPT_PATH,
@@ -40,6 +42,20 @@ export function scraplingFetchFragment(item, options = {}) {
 		"--type",
 		type,
 	];
+
+	if (url) {
+		args.push("--url", url);
+	}
+
+	if (wait) {
+		args.push("--wait", wait);
+	} else if (type === "number" || type === "username") {
+		// Default wait for standard pages
+		args.push("--wait", ".tm-section-header-status");
+	} else {
+		// No wait for custom pages unless specified
+		args.push("--wait", "");
+	}
 
 	if (proxy) {
 		args.push("--proxy", proxy);

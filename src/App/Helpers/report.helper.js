@@ -650,7 +650,7 @@ export function buildFullCaption(
 	const dictMeaning =
 		GOLDEN_DICTIONARY[rawUsername.toLowerCase()] ||
 		estValue.linguistics?.meaning;
-	if (dictMeaning) msg += `📖 *معنی لغوی:* _${escapeMD(dictMeaning)}_\n`;
+	if (dictMeaning) msg += `📖 *Literal Meaning:* _${escapeMD(dictMeaning)}_\n`;
 	msg += `\n`;
 
 	// 💰 FAIR VALUE (EST.)
