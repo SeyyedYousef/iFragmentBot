@@ -72,35 +72,48 @@ function safeNum(v, fallback = 0) {
 
 /**
  * Parse number link to extract +888 number
- * Supports: fragment.com/number/8881234567890, +8881234567890, 8881234567890
+ * Supports: fragment.com/number/8881234567890, +8881234567890, 8881234567890, 80808080
  */
 export function parseNumberLink(input) {
 	const raw = String(input).trim();
 	if (!raw) return { isValid: false };
 
-	// fragment.com/number/888XXXXXXXXXX
-	const fragmentMatch = raw.match(
+	// 1. Extract raw digits and handle Fragment/T.me links
+	let clean = raw.replace(/[\s\-+]/g, "");
+	const linkMatch = raw.match(
 		/(?:fragment\.com\/number\/|t\.me\/number\/)(\d+)/i,
 	);
-	if (fragmentMatch) {
-		const num = fragmentMatch[1];
-		// Valid anonymous numbers: short (888 + 4 = 7 digits) or standard (888 + 8 = 11 digits)
-		if (num.startsWith("888") && (num.length === 7 || num.length === 11)) {
-			return {
-				number: `+${num}`,
-				numberClean: num,
-				isValid: true,
-			};
-		}
+	if (linkMatch) {
+		clean = linkMatch[1];
 	}
 
-	// Raw: +8881234567890 or 8881234567890
-	const clean = raw.replace(/[\s\-+]/g, "");
-	// Allow short 7-digit total: 888 + 4 digits OR standard 11-digit
+	// 2. Intelligent Prefix Handling
+	// If it starts with 888888, the user probably entered the prefix twice (e.g. 888 + 8881234567)
+	if (clean.startsWith("888888")) {
+		clean = clean.slice(3);
+	}
+
+	// 3. Validation and Normalization
+	// Standard anonymous numbers are either:
+	// - 11 digits total (888 + 8 digits)
+	// - 7 digits total (888 + 4 digits) - Rare/Short
+	// - 8 digits (just the number part, we'll add 888)
+	// - 4 digits (just the short number part, we'll add 888)
+
+	let finalNumber = null;
+
 	if (/^888(\d{4}|\d{8})$/.test(clean)) {
+		// Already has prefix and correct length
+		finalNumber = clean;
+	} else if (/^(\d{4}|\d{8})$/.test(clean)) {
+		// Missing prefix, add it
+		finalNumber = `888${clean}`;
+	}
+
+	if (finalNumber) {
 		return {
-			number: `+${clean}`,
-			numberClean: clean,
+			number: `+${finalNumber}`,
+			numberClean: finalNumber,
 			isValid: true,
 		};
 	}
@@ -117,7 +130,11 @@ export function formatDisplayNumber(number) {
 	if (clean.startsWith("888") && clean.length >= 7) {
 		const rest = clean.slice(3);
 		if (rest.length <= 10) {
-			// For very short numbers (e.g. 4 digits after 888) keep readability
+			// For standard 8-digit numbers, group by 4 (e.g. +888 8080 8080)
+			if (rest.length === 8) {
+				return `+888 ${rest.slice(0, 4)} ${rest.slice(4)}`;
+			}
+			// For others (like 4893) or odd lengths
 			if (rest.length <= 4) return `+888 ${rest}`;
 			const chunks = rest.match(/.{1,3}/g) || [rest];
 			return `+888 ${chunks.join(" ")}`;
@@ -340,21 +357,24 @@ async function scrapeFragmentNumber(numberClean) {
 
 		const html = payload.html;
 
-		let status = "unknown";
-		const statusMatch = html.match(
-			/tm-section-header-status[^>]*>\s*([^<]+)\s*</i,
-		);
-		if (statusMatch) {
-			const s = statusMatch[1].trim().toLowerCase();
-			if (s.includes("sold")) status = "sold";
-			else if (s.includes("auction")) status = "on_auction";
-			else if (s.includes("sale")) status = "for_sale";
-			else if (s.includes("available")) status = "available";
+		if (html.includes("Address unavailable") || html.includes("Number not found")) {
+			status = "not_found";
 		} else {
-			if (/sold/i.test(html)) status = "sold";
-			else if (/auction/i.test(html)) status = "on_auction";
-			else if (/for sale|sale/i.test(html)) status = "for_sale";
-			else if (/available/i.test(html)) status = "available";
+			const statusMatch = html.match(
+				/tm-section-header-status[^>]*>\s*([^<]+)\s*</i,
+			);
+			if (statusMatch) {
+				const s = statusMatch[1].trim().toLowerCase();
+				if (s.includes("sold")) status = "sold";
+				else if (s.includes("auction")) status = "on_auction";
+				else if (s.includes("sale")) status = "for_sale";
+				else if (s.includes("available")) status = "available";
+			} else {
+				if (/sold/i.test(html)) status = "sold";
+				else if (/auction/i.test(html)) status = "on_auction";
+				else if (/for sale|sale/i.test(html)) status = "for_sale";
+				else if (/available/i.test(html)) status = "available";
+			}
 		}
 
 		const priceMatches = [
@@ -613,9 +633,14 @@ export async function generateNumberReport(input, tonPrice = 5.5) {
 	const status = scraped.status;
 	const priceTon = scraped.priceTon;
 
-	// Throw error if the number is not minted on Fragment
-	if (status === "not_found") {
-		throw new Error("This number is not currently minted on Fragment.");
+	// Check if the number is minted on Fragment
+	if (status === "not_found" || status === "unknown") {
+		// Double check: if it's unknown but we have no price and it's a direct fragment page, it's likely unminted
+		if (!priceTon && !scraped.highestBid) {
+			throw new Error(
+				"❌ این شماره هنوز در فرگمنت مینت (ضرب) نشده است!\n\nThis number is not yet minted on Fragment. Only numbers minted during the initial 2022 sale can be analyzed.",
+			);
+		}
 	}
 
 	// Pattern analysis (passes the collection floor)
