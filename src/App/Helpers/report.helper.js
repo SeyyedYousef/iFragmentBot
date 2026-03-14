@@ -649,8 +649,11 @@ export function buildFullCaption(
 	msg += `_${escapeMD(definition)}_\n`;
 	const dictMeaning =
 		GOLDEN_DICTIONARY[rawUsername.toLowerCase()] ||
-		estValue.linguistics?.meaning;
-	if (dictMeaning) msg += `📖 *Literal Meaning:* _${escapeMD(dictMeaning)}_\n`;
+		estValue.linguistics?.meaning ||
+		estValue.aiDefinition;
+	if (dictMeaning && dictMeaning !== "None" && dictMeaning !== "N/A" && dictMeaning !== "Personal Handle" && dictMeaning !== "Random String") {
+		msg += `📖 *Word Meaning:* _${escapeMD(dictMeaning)}_\n`;
+	}
 	msg += `\n`;
 
 	// 💰 FAIR VALUE (EST.)
@@ -658,12 +661,6 @@ export function buildFullCaption(
 	msg += `▸ 🏷️  *${valTon} TON*  (~$${valUsd})\n`;
 	msg += `▸ ${rarity.stars || "⭐"} *${escapeMD(tier)}* • ${escapeMD(rarity.label || "Asset")}\n`;
 	msg += `▸ 🎯 Confidence: *${getConfidenceLabel(confidence)}* (${confidence}%)\n`;
-	msg += `▸ 🧾 Data Quality: *${dqLevel}* (${dq}/100)\n`;
-
-	// Policy floor line (explicit)
-	if (rawUsername.length === 4) {
-		msg += `▸ 📌 Hard Floor (Telegram): *${formatNum(POLICY_FLOOR_4L)} TON*\n`;
-	}
 
 	if (Number.isFinite(gapVsMarket)) {
 		msg += `▸ 📊 Gap vs Listing: *${formatPct(gapVsMarket)}*\n`;
@@ -798,12 +795,12 @@ export function buildFullCaption(
 	const allSimilar = (
 		Array.isArray(similarSources) ? similarSources : [similarSources]
 	)
-		.filter((f) => f && typeof f === "string" && f.startsWith("@"))
-		.filter((f) => !/_bot/i.test(f))
+		.filter((f) => f && typeof f === "string")
+		.filter((f) => f.startsWith("@") || f.includes("Sim. Market") || f.includes("Sold Before"))
 		.slice(0, 6);
 
 	if (allSimilar.length > 0) {
-		msg += `――――― 📊 *COMPARABLES* ―――――\n`;
+		msg += `――――― 📊 *SIMILAR ITEMS* ―――――\n`;
 		allSimilar.forEach((f) => (msg += `▸ ${escapeMD(f)}\n`));
 		msg += `\n`;
 	}

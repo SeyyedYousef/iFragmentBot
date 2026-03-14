@@ -10,6 +10,7 @@ import { StringSession } from "telegram/sessions/index.js";
 import {
 	accounts as dbAccounts,
 	settings,
+	accountStatus,
 } from "../../../database/panelDatabase.js";
 import {
 	decrypt,

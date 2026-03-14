@@ -283,19 +283,78 @@ function analyzeNumberPattern(numberClean, globalFloor = 850) {
 
 	// Sequence checking (e.g. 12345678)
 	if (type === "Standard") {
-		let isSeq = true;
+		let isLadderUp = true;
+		let isLadderDown = true;
 		for (let i = 1; i < d.length; i++) {
-			if (d[i] !== d[i - 1] + 1 && d[i] !== d[i - 1] - 1) {
-				isSeq = false;
-				break;
-			}
+			if (d[i] !== d[i - 1] + 1) isLadderUp = false;
+			if (d[i] !== d[i - 1] - 1) isLadderDown = false;
 		}
-		if (isSeq && d.length >= 4) {
-			type = "Sequence";
-			label = "Sequence";
-			bonus = 50;
-			score = 80;
-			patternFloor = Math.max(patternFloor, 5000);
+		if (isLadderUp || isLadderDown) {
+			type = "Ladder";
+			label = isLadderUp ? "Ascending Ladder" : "Descending Ladder";
+			bonus = 150;
+			score = 90;
+			patternFloor = Math.max(patternFloor, 15000);
+		}
+	}
+
+	// Repeated Triple (e.g. 123 123)
+	if (type === "Standard" && tail.length >= 6) {
+		const part1 = tail.slice(0, 3);
+		const part2 = tail.slice(3, 6);
+		if (part1 === part2) {
+			type = "RepeatedTriple";
+			label = `Repeated Triple (${part1} ${part2})`;
+			bonus = 80;
+			score = 82;
+			patternFloor = Math.max(patternFloor, 8000);
+		}
+	}
+
+	// Double Triple (e.g. 555 888)
+	if (type === "Standard" && tail.length >= 6) {
+		if (/^(.)\1{2}(.)\2{2}$/.test(tail.slice(0, 6))) {
+			type = "DoubleTriple";
+			label = `Double Triple (XXX YYY)`;
+			bonus = 100;
+			score = 85;
+			patternFloor = Math.max(patternFloor, 12000);
+		}
+	}
+
+	// Quad Pairs (e.g. 11 22 33 44)
+	if (type === "Standard" && tail.length === 8) {
+		if (/^(.)\1(.)\2(.)\3(.)\4$/.test(tail)) {
+			type = "QuadPairs";
+			label = `Quad Pairs (AABBCCDD)`;
+			bonus = 110;
+			score = 88;
+			patternFloor = Math.max(patternFloor, 18000);
+		}
+	}
+
+	// Mirror / Radar (e.g. 1234 4321)
+	if (type === "Standard" && tail.length >= 6) {
+		const part = tail.slice(0, tail.length % 2 === 0 ? tail.length : tail.length - 1);
+		if (part.length >= 6 && part === part.split("").reverse().join("")) {
+			type = "Mirror";
+			label = `Mirror (${part})`;
+			bonus = 120;
+			score = 89;
+			patternFloor = Math.max(patternFloor, 20000);
+		}
+	}
+
+	// Birth Year (e.g. ...1995, ...2024)
+	if (type === "Standard" && tail.length >= 4) {
+		const yearSuffix = tail.slice(-4);
+		const yearVal = parseInt(yearSuffix, 10);
+		if (yearVal >= 1950 && yearVal <= 2030) {
+			type = "Year";
+			label = `Year Suffix (${yearSuffix})`;
+			bonus = 40;
+			score = 72;
+			patternFloor = Math.max(patternFloor, 1500);
 		}
 	}
 
@@ -387,10 +446,18 @@ async function scrapeFragmentNumber(numberClean) {
 		let priceTon = null;
 		if (prices.length > 0) priceTon = prices[0];
 
+		// 4. Extract Owner Address
+		const ownerMatch = html.match(/tm-wallet-address">(\w+)<\/span>/) || 
+		                  html.match(/address\/(\w+)/);
+		const owner = ownerMatch ? ownerMatch[1] : null;
+
+		// 5. Last Sale Price (if status is sold, first price is often last sale)
+		const lastSale = (status === "sold" && prices.length > 0) ? prices[0] : null;
+
 		const highestBid = status === "on_auction" && prices.length >= 1 ? prices[0] : null;
 		const minBid = status === "on_auction" && prices.length >= 3 ? prices[2] : null;
 
-		return { status, priceTon, highestBid, minBid, url: baseUrl };
+		return { status, priceTon, highestBid, minBid, url: baseUrl, owner, lastSale };
 	} catch (e) {
 		console.warn("⚠️ Fragment number scrape failed:", e.message);
 		return { status: "unknown", priceTon: null, url: baseUrl };
@@ -686,10 +753,21 @@ export async function generateNumberReport(input, tonPrice = 5.5) {
 		registeredText = "⏳ N/A";
 	}
 
+	// Fetch History from See.tg
+	let history = [];
+	try {
+		const histData = await seetgService.getGiftHistory("anonymous-number", numberClean);
+		if (histData && histData.transfers) {
+			history = histData.transfers;
+		}
+	} catch (e) {
+		console.warn("See.tg history fetch failed:", e.message);
+	}
+
 	const tonUsd = tonPrice || tonPriceCache.get("price") || 5.5;
 	const estUsd = Math.round(estimated * tonUsd);
 
-	// Build report (without RESOURCES & LINKS section)
+	// Build report
 	let report = "";
 	report += `📱 *${formattedNumber}*\n`;
 	report += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
@@ -697,6 +775,20 @@ export async function generateNumberReport(input, tonPrice = 5.5) {
 	if (priceTon) report += `  •  Price: *${formatNumber(priceTon)} TON*`;
 	report += `\n`;
 	report += `🔗 [Fragment](${url})\n\n`;
+
+	report += `――――― 📊 *MARKET SNAPSHOT* ―――――\n`;
+	report += `▸ Status: ${statusDisplay}\n`;
+	if (scraped.lastSale) {
+		report += `▸ Last Sale: *${formatNumber(scraped.lastSale)} TON*\n`;
+	} else if (priceTon && status === "sold") {
+		report += `▸ Last Sale: *${formatNumber(priceTon)} TON*\n`;
+	}
+	report += `▸ Fragment: [link](${url})\n`;
+	if (scraped.owner) {
+		const shortAddr = `${scraped.owner.substring(0, 8)}...${scraped.owner.slice(-6)}`;
+		report += `▸ Owner: \`${shortAddr}\`\n`;
+	}
+	report += `\n`;
 
 	report += `――――― 💎 *VALUE ESTIMATE* ―――――\n`;
 	report += `▸ 🏷️  Fair Value: *~${formatNumber(estimated)} TON*\n`;
@@ -708,7 +800,6 @@ export async function generateNumberReport(input, tonPrice = 5.5) {
 	else report += `\n`;
 
 	report += `――――― 📈 *MARKET MOMENTUM* ―――――\n`;
-	report += `▸ 🏛️ Collection: Anonymous Telegram Numbers (+888)\n`;
 	report += `▸ 💰 Floor: *${formatNumber(floor)} TON*\n`;
 
 	if (momentum) {
@@ -722,21 +813,27 @@ export async function generateNumberReport(input, tonPrice = 5.5) {
 			report += `▸ 💹 24h Volume: *${formatNumber(Math.round(momentum.volume24h / 1e9))} TON*\n`;
 	}
 
-	if (model.marketMedian)
-		report += `▸ 📊 Market Median (sample): *${formatNumber(Math.round(model.marketMedian))} TON*\n`;
-	if (model.compMedian)
-		report += `▸ 🧩 Comparable Median: *${formatNumber(Math.round(model.compMedian))} TON*\n`;
-	report += `▸ 📊 Confidence: *${model.confidence >= 70 ? "High" : model.confidence >= 50 ? "Medium" : "Low"}* (${model.confidence}%)\n`;
-	report += `▸ 📊 Total Supply: 136,566 (Sold Out Dec 2022)\n`;
-	report += `▸ 🔥 Record Sale: +888 8 888 888 @ 300,000 TON\n\n`;
+	report += `▸ 📊 Confidence: *${model.confidence >= 70 ? "High" : model.confidence >= 50 ? "Medium" : "Low"}* (${model.confidence}%)\n\n`;
 
 	report += `――――― 👥 *HOLDER INSIGHTS* ―――――\n`;
-	if (scraped.owner) {
-		const shortAddr = `${scraped.owner.substring(0, 8)}...${scraped.owner.slice(-6)}`;
-		report += `▸ 👤 Current Owner: \`${shortAddr}\`\n`;
-	}
 	report += `▸ 📱 Registered: ${registeredText}\n`;
-	report += `▸ 🏛️ Status: ${statusDisplay}\n\n`;
+	report += `▸ 🏛️ Status: ${statusDisplay}\n`;
+	if (scraped.owner) {
+		report += `▸ 👤 Owner: \`${scraped.owner.substring(0, 8)}...${scraped.owner.slice(-6)}\`\n`;
+	}
+	report += `\n`;
+
+	if (history && history.length > 0) {
+		report += `――――― 📜 *HISTORY* ―――――\n`;
+		const maxH = Math.min(history.length, 3);
+		for (let i = 0; i < maxH; i++) {
+			const tr = history[i];
+			const date = tr.date ? new Date(tr.date).toLocaleDateString() : "Unknown";
+			const price = tr.price ? ` @ ${formatNumber(tr.price)} TON` : "";
+			report += `▸ ${date}${price}\n`;
+		}
+		report += `\n`;
+	}
 
 	report += `――――― 🎰 *NUMBER PATTERN* ―――――\n`;
 	report += `▸ Type: *${pattern.label}*\n`;
@@ -748,9 +845,9 @@ export async function generateNumberReport(input, tonPrice = 5.5) {
 
 	report += `――――― 🧠 *EXPERT NOTE* ―――――\n`;
 	if (pattern.type === "Standard") {
-		report += `Standard 10-digit pattern. Value aligned with floor. Consider vanity/lucky digits for premium upside.\n`;
+		report += `Standard Anonymous Number. Value primarily driven by collection floor. Limited vanity premium.\n`;
 	} else {
-		report += `${pattern.label} pattern adds value. Strong demand from collectors.\n`;
+		report += `High-quality ${pattern.label} pattern. Significant collector appeal and price support above floor.\n`;
 	}
 
 	report += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
