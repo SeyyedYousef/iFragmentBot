@@ -1899,42 +1899,6 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 		report += `▸ ${valueBar} *${sign}${valueVsFloor.toFixed(0)}%* vs Floor\n`;
 	}
 
-	// Gap vs Market Median (if we have sufficient samples)
-	const medians = [];
-	if (marketPrices?.model?.median) medians.push(marketPrices.model.median);
-	if (marketPrices?.backdrop?.median)
-		medians.push(marketPrices.backdrop.median);
-	if (marketPrices?.symbol?.median) medians.push(marketPrices.symbol.median);
-	const medianAvg = medians.length
-		? medians.reduce((a, b) => a + b, 0) / medians.length
-		: null;
-	const gapPct =
-		medianAvg && medianAvg > 0
-			? (estimation.estimated / medianAvg - 1) * 100
-			: null;
-	if (Number.isFinite(gapPct)) {
-		const label =
-			gapPct <= -10
-				? "**UNDERPRICED**"
-				: gapPct >= 10
-					? "**OVERPRICED**"
-					: "Market‑Aligned";
-		report += `▸ 📊 Gap vs Market Median: *${gapPct > 0 ? "+" : ""}${gapPct.toFixed(0)}%* → ${label}\n`;
-	}
-
-	// Confidence level - Enhanced 5-Level System
-	const confidenceConfig = {
-		ultra_high: { emoji: "🎯", text: "Ultra High" },
-		very_high: { emoji: "✅", text: "Very High" },
-		high: { emoji: "📊", text: "High" },
-		moderate: { emoji: "⚡", text: "Moderate" },
-		low: { emoji: "⚠️", text: "Low" },
-		very_low: { emoji: "❓", text: "Very Low" },
-	};
-	const confLevel =
-		confidenceConfig[estimation.confidence] || confidenceConfig.moderate;
-	report += `▸ ${confLevel.emoji} Confidence: _${confLevel.text}_ (${estimation.confidenceScore || 50}%)\n\n`;
-
 	// ═══ 📊 COLLECTION PULSE ═══
 	report += `――――― 📊 *COLLECTION PULSE* ―――――\n`;
 	report += `▸ 🏛️ *${escapeMD(collection.name)}*\n`;
@@ -1963,40 +1927,6 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 	const vol24h = nanoToTon(ci?.volume24h) || null;
 	const vol7d = nanoToTon(ci?.volume7d) || volume7d || null;
 
-	// Global Ecosystem Insights
-	if (seetgData.overallStats) {
-		const os = seetgData.overallStats;
-		const globalHolders = os.counts?.owners || 0;
-		const globalGifts = os.counts?.gifts || 0;
-		const globalAvgCap = os.floors?.total?.average?.ton || 0;
-
-		report += `――――― 🌎 *GLOBAL ECOSYSTEM* ―――――\n`;
-		report += `▸ 👥 Total Holders: *${formatNumber(globalHolders)}* collectors\n`;
-		report += `▸ 🎁 Gift Circulation: *${formatNumber(globalGifts)}* items\n`;
-		if (globalAvgCap > 0) {
-			report += `▸ 💰 Ecosystem Cap: *${formatNumber(Math.round(globalAvgCap))} TON* (~$${formatNumber(Math.round(globalAvgCap * tonPrice))})\n`;
-		}
-	}
-
-	if (vol24h && vol24h > 0) {
-		report += `▸ 💹 24h Vol: *${formatNumber(Math.round(vol24h))} TON*\n`;
-	}
-	if (vol7d && vol7d > 0) {
-		report += `▸ 📈 7d Vol: *${formatNumber(Math.round(vol7d))} TON*\n`;
-	}
-
-	// Collection Trend Radar
-	if (seetgData.overallStats?.trending_collections) {
-		const trending = seetgData.overallStats.trending_collections;
-		const isTrending = trending.some(
-			(c) => c.slug === parsed.collectionSlug || c.name === collection.name,
-		);
-		if (isTrending) {
-			report += `▸ 🔥 **TRENDING NOW** — Top demand on See.tg\n`;
-		}
-	}
-
-	report += `\n`;
 
 	// ═══ 🐳 WHALE WATCH & OWNER INSIGHTS ═══
 	if (seetgData.ownerInfo) {
@@ -2056,95 +1986,6 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 
 	report += `\n`;
 
-	// ═══ 🏦 MULTI‑MARKET LIQUIDITY (Enhanced by See.tg) ═══
-	const providers = giftAssetData?.providers || {};
-	const multiMarketData = seetgData.marketFloors || providers;
-
-	if (multiMarketData) {
-		const providerNames = Object.keys(multiMarketData);
-		if (providerNames.length > 0) {
-			report += `―――― 🏦 *MULTI‑MARKET LIQUIDITY* ――――\n`;
-			report += `Cross-marketplace price intelligence:\n`;
-
-			if (giftAssetData?.market_floor) {
-				const mf = giftAssetData.market_floor;
-				report += `▸ 📊 Aggregated: *${formatNumber(Math.round(mf.min))}* — *${formatNumber(Math.round(mf.max))} TON* (avg: ${formatNumber(Math.round(mf.avg))})\n`;
-			}
-
-			const allowedMarkets = [
-				"fragment",
-				"getgems",
-				"portals",
-				"tonnel",
-				"mrkt",
-			];
-
-			const validFloors = [];
-			for (const pName of providerNames) {
-				const lowerName = pName.toLowerCase();
-				if (!allowedMarkets.includes(lowerName)) continue;
-
-				const p = multiMarketData[pName];
-				const floorVal =
-					typeof p === "object"
-						? safeNum(p.collection_floor, null)
-						: safeNum(p, null);
-
-				if (floorVal && floorVal > 0) {
-					validFloors.push({ pName, floor: floorVal });
-				}
-			}
-
-			validFloors.sort((a, b) => a.floor - b.floor);
-
-			const lowest = validFloors[0] || null;
-			const highest = validFloors[validFloors.length - 1] || null;
-			const spreadPct =
-				lowest && highest && lowest.floor > 0
-					? ((highest.floor - lowest.floor) / lowest.floor) * 100
-					: null;
-
-			const sortedProviderNames = validFloors.map((f) => f.pName);
-
-			for (const pName of sortedProviderNames) {
-				const p = multiMarketData[pName];
-				const floorVal =
-					typeof p === "object"
-						? safeNum(p.collection_floor, null)
-						: safeNum(p, null);
-
-				if (!floorVal) continue;
-
-				const pEmoji =
-					pName === "getgems"
-						? "💎"
-						: pName === "portals"
-							? "🌀"
-							: pName === "tonnel"
-								? "🔷"
-								: pName === "fragment"
-									? "🏛️"
-									: pName === "mrkt"
-										? "🛍️"
-										: "🏪";
-				const pLabel = toTitleCase(pName);
-				const fee = safeNum(providersFee?.[pName], null);
-				const feeText = Number.isFinite(fee)
-					? ` (Fee ${Math.round(fee * 100)}%)`
-					: "";
-
-				let tag = "";
-				if (lowest && pName === lowest.pName) tag = " (LOWEST)";
-				if (highest && pName === highest.pName) tag = " (HIGHEST)";
-
-				report += `▸ ${pEmoji} *${pLabel}:* *${formatNumber(Math.round(floorVal))} TON*${tag}${feeText}\n`;
-			}
-
-			if (Number.isFinite(spreadPct) && spreadPct > 0) {
-				report += `▸ 📉 Cross‑Market Spread: *${spreadPct.toFixed(1)}%*\n`;
-			}
-		}
-	}
 
 	// ═══ 🧬 RARITY INDEX (Gift-Asset) ═══
 	if (giftAssetData?.rarity_index) {

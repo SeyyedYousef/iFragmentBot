@@ -11,6 +11,8 @@ const SCRIPT_PATH = resolve(
 );
 const PYTHON_BIN = process.env.SCRAPLING_PYTHON || "python";
 
+import { getBrowser } from "../../UI/Components/card-generator.component.js";
+
 /**
  * Executes the Scrapling bridge script to fetch Fragment HTML.
  * @param {string} item - Fragment username (without @) or number.
@@ -129,4 +131,62 @@ export function scraplingFetchFragment(item, options = {}) {
 			resolve(payload);
 		});
 	});
+}
+
+/**
+ * Generic Scrapling fetch for any Fragment URL
+ * @param {string} url - Full Fragment URL
+ * @param {object} [options]
+ */
+export async function scrapeFragment(url, options = {}) {
+	try {
+		return await scraplingFetchFragment("query", {
+			...options,
+			url,
+			type: "custom",
+			wait: options.wait || ".tm-section",
+		});
+	} catch (e) {
+		console.warn(`⚠️ Primary Scrapling failed for ${url}, trying Puppeteer...`);
+		return await puppeteerScrape(url, options);
+	}
+}
+
+/**
+ * Robust Puppeteer-based fallback for scraping
+ */
+export async function puppeteerScrape(url, options = {}) {
+	const { wait, timeoutMs = 30000 } = options;
+	let browser = null;
+	let page = null;
+	try {
+		browser = await getBrowser();
+		page = await browser.newPage();
+		
+		// Set a real user agent
+		await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+		
+		await page.goto(url, { waitUntil: "networkidle2", timeout: timeoutMs });
+		
+		if (wait) {
+			try {
+				await page.waitForSelector(wait, { timeout: 10000 });
+			} catch (_e) {
+				console.warn(`⚠️ Timeout waiting for selector: ${wait}`);
+			}
+		}
+
+		const html = await page.content();
+		return {
+			url,
+			status: 200,
+			success: true,
+			html
+		};
+	} catch (e) {
+		console.error(`❌ Puppeteer scrape failed: ${e.message}`);
+		return { success: false, error: e.message };
+	} finally {
+		if (page) await page.close();
+	}
 }

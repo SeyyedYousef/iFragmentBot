@@ -174,27 +174,17 @@ export async function getGiftStats() {
 export async function get888Stats() {
 	console.log("📱 Fetching +888 Stats...");
 
-	// Priority 1: Seetg API (Fastest & Most Reliable if Key exists)
-	try {
-		const seetgCollections =
-			await seetgService.getMarketFloors("anonymous-number");
-		if (seetgCollections?.floor && parseFloat(seetgCollections.floor) > 0) {
-			console.log(`📱 Seetg returned +888 floor: ${seetgCollections.floor}`);
-			return parseFloat(seetgCollections.floor);
-		}
-	} catch (_e) {
-		// Ignore Seetg errors (likely auth)
-	}
-
-	// Priority 2: Scrapling (Reliable & Fast)
+	// Priority 1: Scrapling (Reliable & Real-time)
 	try {
 		console.log("📱 Attempting to fetch +888 Floor with Scrapling...");
 		const scraped = await scraplingService.scrapeFragment(
 			"https://fragment.com/numbers?sort=price_asc&filter=sale",
+			{ wait: ".tm-table-grid" },
 		);
 
 		if (scraped?.success && scraped.html) {
-			const priceMatch = scraped.html.match(/([\d,.]+)\s*TON/);
+			const priceMatch = scraped.html.match(/icon-ton">([\d,]+(?:\.\d+)?)<\/div>/) || 
+							  scraped.html.match(/([\d,.]+)\s*TON/);
 			if (priceMatch) {
 				const price = parseFloat(priceMatch[1].replace(/,/g, ""));
 				if (price > 0) {
@@ -205,6 +195,18 @@ export async function get888Stats() {
 		}
 	} catch (e) {
 		console.warn(`⚠️ Scrapling floor fetch failed: ${e.message}`);
+	}
+
+	// Priority 2: Seetg API (Fallback)
+	try {
+		const seetgCollections =
+			await seetgService.getMarketFloors("anonymous-number");
+		if (seetgCollections?.floor && parseFloat(seetgCollections.floor) > 0) {
+			console.log(`📱 Seetg returned +888 floor: ${seetgCollections.floor}`);
+			return parseFloat(seetgCollections.floor);
+		}
+	} catch (_e) {
+		// Ignore Seetg errors
 	}
 
 	// Priority 3: Marketapp API
