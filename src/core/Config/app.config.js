@@ -1354,7 +1354,9 @@ export function getSuggestions(username) {
 	// METHOD 1: Find similar usernames from CSV data (THE GOLD MINE)
 	// ═══════════════════════════════════════════════════════════════════════════════════════════
 	const similarFromCSV = findSimilarFromLibrary(base, 5);
-	similarFromCSV.forEach((s) => suggestions.add(s));
+	similarFromCSV.forEach((s) => {
+		suggestions.add(s);
+	});
 
 	// ═══════════════════════════════════════════════════════════════════════════════════════════
 	// METHOD 2: Synonym & Related Words
@@ -1383,7 +1385,9 @@ export function getSuggestions(username) {
 	};
 
 	if (SYNONYMS[base]) {
-		SYNONYMS[base].slice(0, 3).forEach((s) => suggestions.add(s));
+		SYNONYMS[base].slice(0, 3).forEach((s) => {
+			suggestions.add(s);
+		});
 	}
 
 	// Check if base contains a synonym key
@@ -1420,7 +1424,9 @@ export function getSuggestions(username) {
 	if (base.length <= 6) {
 		SUFFIXES.slice(0, 4).forEach((suffix) => {
 			const variant = base + suffix;
-			if (variant.length <= 32) suggestions.add(variant);
+			if (variant.length <= 32) {
+				suggestions.add(variant);
+			}
 		});
 	}
 
@@ -1428,7 +1434,9 @@ export function getSuggestions(username) {
 	if (base.length <= 8) {
 		PREFIXES.slice(0, 3).forEach((prefix) => {
 			const variant = prefix + base;
-			if (variant.length <= 32) suggestions.add(variant);
+			if (variant.length <= 32) {
+				suggestions.add(variant);
+			}
 		});
 	}
 
@@ -1443,7 +1451,9 @@ export function getSuggestions(username) {
 		// Try common letter additions
 		["s", "x", "y", "z", "o"].forEach((letter) => {
 			const longer = base + letter;
-			if (longer.length <= 8) suggestions.add(longer);
+			if (longer.length <= 8) {
+				suggestions.add(longer);
+			}
 		});
 	}
 

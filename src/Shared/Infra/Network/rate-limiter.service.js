@@ -39,7 +39,7 @@ export function getUserLimiter(userId) {
 	const key = String(userId);
 
 	if (userLimiters.has(key)) {
-		const { limiter, lastUsed } = userLimiters.get(key);
+		const { limiter } = userLimiters.get(key);
 		userLimiters.set(key, { limiter, lastUsed: Date.now() });
 		return limiter;
 	}

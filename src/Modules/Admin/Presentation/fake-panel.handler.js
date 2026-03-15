@@ -219,9 +219,13 @@ export function registerFakePanelHandlers(bot, isAdmin) {
 
 		let msg = `📋 *کامنت‌های آماده*\n\n`;
 		msg += `👍 *مثبت:*\n`;
-		positiveComments.forEach((c, i) => (msg += `${i + 1}. ${c}\n`));
+		positiveComments.forEach((c, i) => {
+			msg += `${i + 1}. ${c}\n`;
+		});
 		msg += `\n😐 *خنثی:*\n`;
-		neutralComments.forEach((c, i) => (msg += `${i + 1}. ${c}\n`));
+		neutralComments.forEach((c, i) => {
+			msg += `${i + 1}. ${c}\n`;
+		});
 
 		await ctx.editMessageText(msg, {
 			parse_mode: "Markdown",

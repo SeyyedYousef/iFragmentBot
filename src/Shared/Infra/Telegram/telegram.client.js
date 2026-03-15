@@ -425,14 +425,13 @@ async function getUserGiftsWithValue(userId) {
 					`🎁 Fetching gifts chunk ${loopCount + 1}... (Offset: ${offset || "Start"})`,
 				);
 
-				// Correct GramJS way: Api.payments.GetUserStarGifts
-				const result = await client.invoke(
-					new Api.payments.GetUserStarGifts({
-						userId: userEntity,
-						offset: offset,
-						limit: 100,
-					}),
-				);
+				// Use raw invoke to handle missing constructor in older GramJS versions
+				const result = await client.invoke({
+					_: "payments.getUserStarGifts",
+					userId: userEntity,
+					offset: offset,
+					limit: 100,
+				});
 
 				if (!result || !result.gifts || result.gifts.length === 0) {
 					break;

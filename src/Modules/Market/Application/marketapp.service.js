@@ -111,7 +111,7 @@ export function parseGiftLink(link) {
  * Get human-readable owner name from wallet address
  * Uses TONAPI to resolve TON DNS names
  */
-async function getOwnerName(walletAddress) {
+async function _getOwnerName(walletAddress) {
 	if (!walletAddress) return null;
 
 	try {
@@ -1250,7 +1250,6 @@ function calculate5LevelConfidence({
 	marketPrices,
 	historicalPrediction,
 	dataQuality,
-	avgRarityScore,
 }) {
 	let score = 0;
 
@@ -1677,15 +1676,21 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 
 	try {
 		console.log("📊 Fetching Advanced See.tg Intelligence...");
-		const [seetgGift, floorChanges, history, collectionInfo, marketFloors, overallStats] =
-			await Promise.all([
-				seetg.getGiftInfo(parsed.collectionSlug, parsed.itemNumber),
-				seetg.getFloorChanges(parsed.collectionSlug),
-				seetg.getGiftHistory(parsed.collectionSlug, parsed.itemNumber),
-				seetg.getCollectionInfo(parsed.collectionSlug),
-				seetg.getMarketFloors(parsed.collectionSlug),
-				seetg.getStats(),
-			]);
+		const [
+			seetgGift,
+			floorChanges,
+			history,
+			collectionInfo,
+			marketFloors,
+			overallStats,
+		] = await Promise.all([
+			seetg.getGiftInfo(parsed.collectionSlug, parsed.itemNumber),
+			seetg.getFloorChanges(parsed.collectionSlug),
+			seetg.getGiftHistory(parsed.collectionSlug, parsed.itemNumber),
+			seetg.getCollectionInfo(parsed.collectionSlug),
+			seetg.getMarketFloors(parsed.collectionSlug),
+			seetg.getStats(),
+		]);
 
 		if (seetgGift) {
 			seetgData.ownerUsername =
@@ -1740,9 +1745,9 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 
 	// ═══ GIFT-ASSET ENHANCED DATA ═══
 	let giftAssetData = null;
-	let giftAssetEmission = null;
-	let giftAssetCap = null;
-	let collectionOffers = null;
+	let _giftAssetEmission = null;
+	let _giftAssetCap = null;
+	let _collectionOffers = null;
 	let providersFee = null;
 	try {
 		const variants = [
@@ -1764,9 +1769,9 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 			giftAssetAPI.getProvidersFee(),
 		]);
 
-		giftAssetEmission = gaEmission;
-		giftAssetCap = gaCap;
-		collectionOffers = gaOffers;
+		_giftAssetEmission = gaEmission;
+		_giftAssetCap = gaCap;
+		_collectionOffers = gaOffers;
 		providersFee = gaFees;
 
 		for (const variant of variants) {
@@ -1812,7 +1817,7 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 	);
 
 	// Get rank and similar priced gifts for comparison
-	const rankData = await getGiftRankAndRecentSales(
+	const _rankData = await getGiftRankAndRecentSales(
 		collection.address,
 		parsed.collectionSlug,
 		estimation.estimated,
@@ -1958,27 +1963,20 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 	const vol24h = nanoToTon(ci?.volume24h) || null;
 	const vol7d = nanoToTon(ci?.volume7d) || volume7d || null;
 
-	// Market Cap Rank (GiftAsset)
-	if (
-		giftAssetCap &&
-		collection.name &&
-		giftAssetCap[collection.name]?.market_cap
-	) {
-		const caps = Object.entries(giftAssetCap)
-			.map(([name, v]) => ({ name, cap: safeNum(v?.market_cap, 0) || 0 }))
-			.filter((x) => x.cap > 0)
-			.sort((a, b) => b.cap - a.cap);
-		const idx = caps.findIndex((x) => x.name === collection.name);
-		const rank = idx >= 0 ? idx + 1 : null;
-		const capValue = safeNum(giftAssetCap[collection.name].market_cap, null);
-		if (capValue) {
-			report += `▸ 💸 Market Cap: *${formatNumber(Math.round(capValue))} TON*`;
-			if (rank) report += ` (Rank #${rank}) 🏆`;
-			report += `\n`;
+	// Global Ecosystem Insights
+	if (seetgData.overallStats) {
+		const os = seetgData.overallStats;
+		const globalHolders = os.counts?.owners || 0;
+		const globalGifts = os.counts?.gifts || 0;
+		const globalAvgCap = os.floors?.total?.average?.ton || 0;
+
+		report += `――――― 🌎 *GLOBAL ECOSYSTEM* ―――――\n`;
+		report += `▸ 👥 Total Holders: *${formatNumber(globalHolders)}* collectors\n`;
+		report += `▸ 🎁 Gift Circulation: *${formatNumber(globalGifts)}* items\n`;
+		if (globalAvgCap > 0) {
+			report += `▸ 💰 Ecosystem Cap: *${formatNumber(Math.round(globalAvgCap))} TON* (~$${formatNumber(Math.round(globalAvgCap * tonPrice))})\n`;
 		}
 	}
-
-
 
 	if (vol24h && vol24h > 0) {
 		report += `▸ 💹 24h Vol: *${formatNumber(Math.round(vol24h))} TON*\n`;
@@ -1990,7 +1988,9 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 	// Collection Trend Radar
 	if (seetgData.overallStats?.trending_collections) {
 		const trending = seetgData.overallStats.trending_collections;
-		const isTrending = trending.some(c => c.slug === parsed.collectionSlug || c.name === collection.name);
+		const isTrending = trending.some(
+			(c) => c.slug === parsed.collectionSlug || c.name === collection.name,
+		);
 		if (isTrending) {
 			report += `▸ 🔥 **TRENDING NOW** — Top demand on See.tg\n`;
 		}
@@ -1998,25 +1998,23 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 
 	report += `\n`;
 
-
-
 	// ═══ 🐳 WHALE WATCH & OWNER INSIGHTS ═══
 	if (seetgData.ownerInfo) {
 		const oi = seetgData.ownerInfo;
 		const portfolioValue = Math.round(oi.totalValue || 0);
 		const isWhale = portfolioValue > 5000;
 		const whaleEmoji = isWhale ? "🐋" : "👤";
-		
+
 		report += `――――― ${whaleEmoji} *WHALE WATCH* ―――――\n`;
 		report += `▸ 👤 Owner: @${escapeMD(oi.username || seetgData.ownerUsername || "Unknown")}`;
 		if (oi.name) report += ` (_${escapeMD(oi.name)}_)`;
 		report += `\n`;
-		
+
 		const status = isWhale ? "**WHALE HOLDER** 🌊" : "Active Collector";
 		report += `▸ 📊 Status: ${status}\n`;
 		report += `▸ 💰 Portfolio: *${formatNumber(portfolioValue)} TON* (~$${formatNumber(Math.round(portfolioValue * tonPrice))})\n`;
 		report += `▸ 🎁 Inventory: *${formatNumber(oi.giftsCount || 0)}* gifts\n`;
-		
+
 		// Diamond Hands Badge
 		if (seetgData.daysHeld && seetgData.daysHeld > 30) {
 			let badge = "💎 **DIAMOND HANDS**";
@@ -2026,7 +2024,9 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 		}
 		report += `\n`;
 	} else if (seetgData.ownerUsername || giftOwner) {
-		const name = seetgData.ownerUsername ? `@${seetgData.ownerUsername}` : "Unknown Owner";
+		const name = seetgData.ownerUsername
+			? `@${seetgData.ownerUsername}`
+			: "Unknown Owner";
 		report += `👤 *Owner:* ${escapeMD(name)}\n\n`;
 	}
 
@@ -2071,22 +2071,30 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 				report += `▸ 📊 Aggregated: *${formatNumber(Math.round(mf.min))}* — *${formatNumber(Math.round(mf.max))} TON* (avg: ${formatNumber(Math.round(mf.avg))})\n`;
 			}
 
-			// Compute lowest/highest provider floors + spread
-			const floors = [];
-			for (const pName of providerNames) {
-				const p = multiMarketData[pName];
-				// See.tg format might be different, handle both { collection_floor: N } and just N
-				const floorVal =
-					typeof p === "object" ? safeNum(p.collection_floor, null) : safeNum(p, null);
+			const allowedMarkets = [
+				"fragment",
+				"getgems",
+				"portals",
+				"tonnel",
+				"mrkt",
+			];
 
-				if (floorVal) {
-					floors.push({ pName, floor: floorVal });
+			const validFloors = [];
+			for (const pName of providerNames) {
+				const lowerName = pName.toLowerCase();
+				if (!allowedMarkets.includes(lowerName)) continue;
+
+				const p = multiMarketData[pName];
+				const floorVal =
+					typeof p === "object"
+						? safeNum(p.collection_floor, null)
+						: safeNum(p, null);
+
+				if (floorVal && floorVal > 0) {
+					validFloors.push({ pName, floor: floorVal });
 				}
 			}
 
-			const validFloors = floors.filter(
-				(f) => Number.isFinite(f.floor) && f.floor > 0,
-			);
 			validFloors.sort((a, b) => a.floor - b.floor);
 
 			const lowest = validFloors[0] || null;
@@ -2096,18 +2104,14 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 					? ((highest.floor - lowest.floor) / lowest.floor) * 100
 					: null;
 
-			// Priority order for display
-			const displayOrder = ["fragment", "getgems", "portals", "tonnel", "mrkt"];
-			const remainingNames = providerNames.filter((n) => !displayOrder.includes(n));
-			const sortedProviderNames = [
-				...displayOrder.filter((n) => providerNames.includes(n)),
-				...remainingNames,
-			];
+			const sortedProviderNames = validFloors.map((f) => f.pName);
 
 			for (const pName of sortedProviderNames) {
 				const p = multiMarketData[pName];
 				const floorVal =
-					typeof p === "object" ? safeNum(p.collection_floor, null) : safeNum(p, null);
+					typeof p === "object"
+						? safeNum(p.collection_floor, null)
+						: safeNum(p, null);
 
 				if (!floorVal) continue;
 
@@ -2139,8 +2143,6 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 			if (Number.isFinite(spreadPct) && spreadPct > 0) {
 				report += `▸ 📉 Cross‑Market Spread: *${spreadPct.toFixed(1)}%*\n`;
 			}
-
-
 		}
 	}
 
@@ -2176,8 +2178,6 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 		report += `\n`;
 	}
 
-
-
 	// ═══ 🎨 ATTRIBUTES & RARITY ═══
 	report += `――――― 🎨 *ATTRIBUTES & RARITY* ―――――\n\n`;
 
@@ -2208,12 +2208,12 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 
 			report += `${emoji} *${type}:* ${tier.emoji} _${escapeMD(details.value)}_\n`;
 			report += `    ▸ Rarity: \`${rarityBar}\` *${details.percentage.toFixed(1)}%*\n`;
-			
+
 			let floorLinkSuffix = "";
 			if (samples && samples.length > 0) {
 				floorLinkSuffix = ` → [🔗](${samples[0].link})`;
 			}
-			
+
 			report += `    ▸ Count: ${formatNumber(details.count)} | Floor: *${formatNumber(Math.round(details.floor))} TON*${floorLinkSuffix}\n\n`;
 		} else if (rawValue) {
 			hasAttributes = true;
@@ -2249,9 +2249,6 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 	if (!hasAttributes) {
 		report += `⏳ _Fetching attribute data..._\n\n`;
 	}
-
-
-
 
 	// ═══ 💎 VALUE DRIVERS ═══
 	if (estimation.bonuses && estimation.bonuses.length > 0) {
@@ -2294,10 +2291,6 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 	} else if (seetgData.transferCount > 0) {
 		report += `📜 *Transfers:* ${seetgData.transferCount} times\n\n`;
 	}
-
-
-
-
 
 	// ═══ 🧠 EXPERT ANALYSIS ═══
 	report += `――――― 🧠 *EXPERT ANALYSIS* ―――――\n`;

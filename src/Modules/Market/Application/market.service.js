@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import fetch from "node-fetch"; // Standard fetch
 import { tonPriceCache } from "../../../Shared/Infra/Cache/cache.service.js";
+import * as scraplingService from "../../../Shared/Infra/Scraping/scrapling.service.js";
 import * as seetgService from "../../Automation/Application/seetg.service.js";
 import * as marketappService from "./marketapp.service.js";
 
@@ -185,87 +186,43 @@ export async function get888Stats() {
 		// Ignore Seetg errors (likely auth)
 	}
 
-	// Priority 2: Puppeteer Scraping using SHARED browser (avoid resource conflicts)
-	let page = null;
+	// Priority 2: Scrapling (Reliable & Fast)
 	try {
-		console.log("📱 Attempting to scrape Fragment with shared browser...");
-
-		const { getBrowser } = await import(
-			"../../../Shared/UI/Components/card-generator.component.js"
-		);
-		const browser = await getBrowser();
-		page = await browser.newPage();
-
-		// Optimized Resource Blocking (Speed up load)
-		await page.setRequestInterception(true);
-		page.on("request", (req) => {
-			if (
-				["image", "stylesheet", "font", "media"].includes(req.resourceType())
-			) {
-				req.abort();
-			} else {
-				req.continue();
-			}
-		});
-
-		await page.setUserAgent(
-			"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+		console.log("📱 Attempting to fetch +888 Floor with Scrapling...");
+		const scraped = await scraplingService.scrapeFragment(
+			"https://fragment.com/numbers?sort=price_asc&filter=sale",
 		);
 
-		// Go to Fragment
-		await page.goto("https://fragment.com/numbers?sort=price_asc&filter=sale", {
-			waitUntil: "domcontentloaded",
-			timeout: 30000,
-		});
-
-		// Wait for ANY currency symbol or value to appear
-		try {
-			await page.waitForSelector(".table-cell-value, .tm-value, table", {
-				timeout: 10000,
-			});
-		} catch (_e) {
-			console.warn("⚠️ Timeout waiting for selectors on Fragment.");
-		}
-
-		// Scrape Price
-		const price = await page.evaluate(() => {
-			const parsePrice = (str) => {
-				if (!str) return null;
-				const match = str.match(/([\d,.]+)\s*TON/);
-				if (match) return parseFloat(match[1].replace(/,/g, ""));
-				return null;
-			};
-
-			const cells = document.querySelectorAll(".table-cell-value");
-			for (const cell of cells) {
-				const p = parsePrice(cell.innerText);
-				if (p && p > 0) return p;
+		if (scraped?.success && scraped.html) {
+			const priceMatch = scraped.html.match(/([\d,.]+)\s*TON/);
+			if (priceMatch) {
+				const price = parseFloat(priceMatch[1].replace(/,/g, ""));
+				if (price > 0) {
+					console.log(`📱 Scrapling returned +888 floor: ${price} TON`);
+					return price;
+				}
 			}
-
-			const table = document.querySelector("table");
-			if (table) {
-				const p = parsePrice(table.innerText);
-				if (p && p > 0) return p;
-			}
-
-			return null;
-		});
-
-		if (price && price > 0) {
-			console.log(`📱 Scraped +888 Price: ${price} TON`);
-			return price;
 		}
 	} catch (e) {
-		console.warn(`⚠️ +888 Scraping Failed: ${e.message}`);
-	} finally {
-		if (page) {
-			try {
-				await page.close();
-			} catch (_e) {}
-		}
+		console.warn(`⚠️ Scrapling floor fetch failed: ${e.message}`);
 	}
 
-	// Priority 3: Dynamic Search/Cache Fallback (Last Resort)
+	// Priority 3: Marketapp API
+	try {
+		const collections = await marketappService.getGiftCollections();
+		const anon = collections?.find(
+			(c) => c.slug === "anonymous-number" || c.name?.includes("Number"),
+		);
+		if (anon) {
+			const price = extractFloorPrice(anon);
+			if (price > 0) {
+				console.log(`📱 Marketapp returned +888 floor: ${price} TON`);
+				return price;
+			}
+		}
+	} catch (_e) {}
+
+	// Priority 4: Dynamic Search/Cache Fallback (Last Resort)
 	const cached = tonPriceCache.get("floor888");
 	if (cached?.price) {
 		console.log(`⚠️ Using Cached +888 Price: ${cached.price} TON`);

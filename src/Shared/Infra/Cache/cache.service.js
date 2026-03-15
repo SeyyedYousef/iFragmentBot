@@ -180,7 +180,7 @@ class Cache {
 // Create cache instances with appropriate settings
 export const fragmentCache = new Cache(10, 5000); // 10 min TTL, max 5000 entries
 export const portfolioCache = new Cache(5, 2000); // 5 min TTL, max 2000 entries
-export const tonPriceCache = new Cache(1440, 10); // 24h TTL (Manually updated), max 10 entries
+export const tonPriceCache = new Cache(30, 10); // 30 min TTL for floor prices & rates
 export const giftValuationCache = new Cache(15, 3000); // 15 min TTL for gift valuation API responses
 
 /**

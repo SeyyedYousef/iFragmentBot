@@ -253,8 +253,11 @@ export async function generateNumberFlexCard(numberData) {
 </body>
 </html>`;
 
-		await page.setContent(htmlContent, { waitUntil: "networkidle0", timeout: 15000 });
-		await new Promise(r => setTimeout(r, 1000));
+		await page.setContent(htmlContent, {
+			waitUntil: "networkidle0",
+			timeout: 15000,
+		});
+		await new Promise((r) => setTimeout(r, 1000));
 		const buffer = await page.screenshot({ type: "png" });
 		console.log(`✅ Refined Card generated: ${buffer.length} bytes`);
 		return buffer;

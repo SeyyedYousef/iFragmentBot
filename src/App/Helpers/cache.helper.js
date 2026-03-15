@@ -42,7 +42,9 @@ export function setCachedReport(username, data) {
 	if (usernameReportCache.size > 500) {
 		const entries = Array.from(usernameReportCache.entries());
 		entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
-		entries.slice(0, 100).forEach(([k]) => usernameReportCache.delete(k));
+		entries.slice(0, 100).forEach(([k]) => {
+			usernameReportCache.delete(k);
+		});
 	}
 
 	console.log(

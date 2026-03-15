@@ -8,9 +8,9 @@ import path from "node:path";
 import { TelegramClient } from "telegram";
 import { StringSession } from "telegram/sessions/index.js";
 import {
+	accountStatus,
 	accounts as dbAccounts,
 	settings,
-	accountStatus,
 } from "../../../database/panelDatabase.js";
 import {
 	decrypt,

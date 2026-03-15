@@ -607,9 +607,6 @@ export function buildFullCaption(
 				? minBidTon
 				: null;
 
-	// ---- Policy floor: Telegram 4-char minimum 5050 TON ----
-	const POLICY_FLOOR_4L = 5050;
-
 	// ---- Comparable baseline (if AI oracle provided) ----
 	const baselineMedian = safeNum(estValue.aiScores?.similar_median, null); // optional if AI provides it
 	const baselineAvg = safeNum(estValue.aiScores?.similar_avg, null);
@@ -637,8 +634,6 @@ export function buildFullCaption(
 	if (baseline) dq += 10;
 	if (estValue.isAi) dq += 10;
 	dq = clamp(dq, 0, 100);
-	const dqLevel =
-		dq >= 85 ? "EXCELLENT" : dq >= 70 ? "GOOD" : dq >= 50 ? "FAIR" : "LOW";
 
 	// ---- Liquidity & risk ----
 	const liquidity = calculateLiquidityScore(rawUsername, tier, estValue);
@@ -651,7 +646,13 @@ export function buildFullCaption(
 		GOLDEN_DICTIONARY[rawUsername.toLowerCase()] ||
 		estValue.linguistics?.meaning ||
 		estValue.aiDefinition;
-	if (dictMeaning && dictMeaning !== "None" && dictMeaning !== "N/A" && dictMeaning !== "Personal Handle" && dictMeaning !== "Random String") {
+	if (
+		dictMeaning &&
+		dictMeaning !== "None" &&
+		dictMeaning !== "N/A" &&
+		dictMeaning !== "Personal Handle" &&
+		dictMeaning !== "Random String"
+	) {
 		msg += `📖 *Word Meaning:* _${escapeMD(dictMeaning)}_\n`;
 	}
 	msg += `\n`;
@@ -796,12 +797,19 @@ export function buildFullCaption(
 		Array.isArray(similarSources) ? similarSources : [similarSources]
 	)
 		.filter((f) => f && typeof f === "string")
-		.filter((f) => f.startsWith("@") || f.includes("Sim. Market") || f.includes("Sold Before"))
+		.filter(
+			(f) =>
+				f.startsWith("@") ||
+				f.includes("Sim. Market") ||
+				f.includes("Sold Before"),
+		)
 		.slice(0, 6);
 
 	if (allSimilar.length > 0) {
 		msg += `――――― 📊 *SIMILAR ITEMS* ―――――\n`;
-		allSimilar.forEach((f) => (msg += `▸ ${escapeMD(f)}\n`));
+		allSimilar.forEach((f) => {
+			msg += `▸ ${escapeMD(f)}\n`;
+		});
 		msg += `\n`;
 	}
 

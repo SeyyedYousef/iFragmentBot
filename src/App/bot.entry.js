@@ -525,7 +525,7 @@ async function initAndLaunch() {
 
 	// Register Gift Report handler
 	jobQueue.registerHandler(JOB_TYPES.GIFT_REPORT, async (job) => {
-		const { chatId, data, userId } = job;
+		const { chatId, data } = job;
 		const { link, tonPrice } = data;
 
 		try {
@@ -675,7 +675,7 @@ async function initAndLaunch() {
 
 	// Register Username Report handler
 	jobQueue.registerHandler(JOB_TYPES.USERNAME_REPORT, async (job) => {
-		const { chatId, data, userId } = job;
+		const { chatId, data } = job;
 		const { username, tonPrice } = data;
 
 		try {
