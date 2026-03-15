@@ -152,242 +152,144 @@ function analyzeNumberPattern(numberClean, globalFloor = 850) {
 	const tail = digits.slice(3); // After 888
 
 	let patternFloor = globalFloor;
-	const d = tail.split("").map(Number);
-	const uniqueCount = new Set(d).size;
-
-	// Ultra-short numbers (888 + 4 digits)
-	if (tail.length <= 4) {
-		patternFloor = Math.max(patternFloor, 100000);
-		const lucky = (tail.match(/[78]/g) || []).length;
-		const bonus = 220 + (uniqueCount <= 2 ? 80 : 0) + (lucky >= 2 ? 30 : 0);
-		return {
-			type: "UltraShort",
-			bonus,
-			label: `Ultra-Short (${tail.length} digits)`,
-			score: 99,
-			uniqueCount,
-			patternFloor,
-		};
-	}
-
-	let type = "Standard";
-	let label = "Standard";
 	let bonus = 0;
 	let score = 40;
+	let type = "Standard";
+	let label = "Standard";
+	let tier = "Standard";
 
-	// 8-digit specific pattern recognition (GetGems Categories)
-	if (tail.length === 8) {
-		const isPalindrome = tail === tail.split("").reverse().join("");
-		const numVal = parseInt(tail, 10);
+	const d = tail.split("").map(Number);
+	const uniqueCount = new Set(d).size;
+	const luckyCount = (tail.match(/[78]/g) || []).length;
+	const consecutiveCount = Math.max(...(tail.match(/(.)\1*/g) || []).map(s => s.length));
 
+	// 1. ULTRA-SHORT (4 Digits) - The Highest Tier
+	if (tail.length <= 4) {
+		patternFloor = 60000; // Base for any 4-digit
+		score = 95;
+		
+		const startsWith8 = tail.startsWith("8");
+		const allLucky = tail.split("").every(x => x === "7" || x === "8");
+		
 		if (uniqueCount === 1) {
-			type = "Repdigit";
-			label = `Solid 8 (XXXXXXXX)`;
+			tier = "Grail";
+			label = "Solid Ultra-Short";
+			bonus = 500;
+			patternFloor = 250000;
+		} else if (allLucky) {
+			tier = "Grail";
+			label = "Ultra-Short Luck (7s & 8s)";
+			bonus = 400;
+			patternFloor = 180000;
+		} else if (startsWith8) {
+			tier = "Elite";
+			label = "Short Prefix-8";
 			bonus = 300;
-			score = 99;
-			patternFloor = Math.max(patternFloor, 200000); // Massive premium
-		} else if (/^.(.)\1{6}$/.test(tail)) {
-			// X YYYYYYY
-			type = "Ending 7";
-			label = `7 Ending Digits (X YYYYYYY)`;
-			bonus = 150;
-			score = 90;
-			patternFloor = Math.max(patternFloor, 45000);
-		} else if (/^(.)\1{3}(.)\2{3}$/.test(tail)) {
-			// XXXX YYYY
-			type = "Halves";
-			label = `Halves (XXXX YYYY)`;
-			bonus = 120;
-			score = 88;
-			patternFloor = Math.max(patternFloor, 25000);
-		} else if (/^(.{2})\1{3}$/.test(tail)) {
-			// XY XY XY XY
-			type = "Alternating";
-			label = `Alternating Pairs (XY XY XY XY)`;
-			bonus = 100;
-			score = 85;
-			patternFloor = Math.max(patternFloor, 20000);
-		} else if (
-			/^(.)\1(.)\2(.)\3(.)\4$/.test(tail) &&
-			new Set([d[0], d[2], d[4], d[6]]).size <= 2
-		) {
-			// e.g., XX YY XX YY
-			type = "Pairs";
-			label = `Double Pairs (XX YY XX YY)`;
-			bonus = 90;
-			score = 84;
-			patternFloor = Math.max(patternFloor, 15000);
-		} else if (/^(.{4})\1$/.test(tail)) {
-			// ABCD ABCD
-			type = "Repeated";
-			label = `Repeated Half (ABCD ABCD)`;
-			bonus = 85;
-			score = 82;
-			patternFloor = Math.max(patternFloor, 12000);
-		} else if (/^(.)\1{2}(.)\2\1{3}$/.test(tail)) {
-			// XXX YY XXX
-			type = "Sandwich";
-			label = `Sandwich (XXX YY XXX)`;
-			bonus = 80;
-			score = 80;
-			patternFloor = Math.max(patternFloor, 10000);
-		} else if (isPalindrome) {
-			type = "Palindrome";
-			label = `Palindrome`;
-			bonus = 70;
-			score = 78;
-			patternFloor = Math.max(patternFloor, 8000);
-		} else if (numVal < 1000) {
-			// 0000 0XXX
-			type = "1K Club";
-			label = `1K Club (00000XXX)`;
-			bonus = 200;
-			score = 95;
-			patternFloor = Math.max(patternFloor, 50000);
-		} else if (numVal < 10000) {
-			// 0000 XXXX
-			type = "10K Club";
-			label = `10K Club (0000XXXX)`;
-			bonus = 100;
-			score = 85;
-			patternFloor = Math.max(patternFloor, 15000);
-		} else if (numVal < 100000) {
-			// 000 XXXXX
-			type = "100K Club";
-			label = `100K Club (000XXXXX)`;
-			bonus = 40;
-			score = 65;
-			patternFloor = Math.max(patternFloor, 2500);
-		}
-	}
-
-	// Checking max consecutive digits as a fallback for 8-digit and others (if not overridden by above strict patterns)
-	if (type === "Standard") {
-		const maxConsecutive = Math.max(
-			...(tail.match(/(.)\1*/g) || []).map((s) => s.length),
-		);
-		if (maxConsecutive >= 3 && uniqueCount > 1) {
-			type = "Repdigit";
-			label = `Repeating ${maxConsecutive} Digits`;
-			bonus = maxConsecutive * 15;
-			score = 65 + maxConsecutive * 5;
-
-			if (maxConsecutive === 3) patternFloor = Math.max(patternFloor, 3600);
-			else if (maxConsecutive === 4)
-				patternFloor = Math.max(patternFloor, 12000);
-			else if (maxConsecutive === 5)
-				patternFloor = Math.max(patternFloor, 35000);
-			else if (maxConsecutive >= 6)
-				patternFloor = Math.max(patternFloor, 150000);
-		}
-	}
-
-	// Sequence checking (e.g. 12345678)
-	if (type === "Standard") {
-		let isLadderUp = true;
-		let isLadderDown = true;
-		for (let i = 1; i < d.length; i++) {
-			if (d[i] !== d[i - 1] + 1) isLadderUp = false;
-			if (d[i] !== d[i - 1] - 1) isLadderDown = false;
-		}
-		if (isLadderUp || isLadderDown) {
-			type = "Ladder";
-			label = isLadderUp ? "Ascending Ladder" : "Descending Ladder";
-			bonus = 150;
-			score = 90;
-			patternFloor = Math.max(patternFloor, 15000);
-		}
-	}
-
-	// Repeated Triple (e.g. 123 123)
-	if (type === "Standard" && tail.length >= 6) {
-		const part1 = tail.slice(0, 3);
-		const part2 = tail.slice(3, 6);
-		if (part1 === part2) {
-			type = "RepeatedTriple";
-			label = `Repeated Triple (${part1} ${part2})`;
-			bonus = 80;
-			score = 82;
-			patternFloor = Math.max(patternFloor, 8000);
-		}
-	}
-
-	// Double Triple (e.g. 555 888)
-	if (type === "Standard" && tail.length >= 6) {
-		if (/^(.)\1{2}(.)\2{2}$/.test(tail.slice(0, 6))) {
-			type = "DoubleTriple";
-			label = `Double Triple (XXX YYY)`;
-			bonus = 100;
-			score = 85;
-			patternFloor = Math.max(patternFloor, 12000);
-		}
-	}
-
-	// Quad Pairs (e.g. 11 22 33 44)
-	if (type === "Standard" && tail.length === 8) {
-		if (/^(.)\1(.)\2(.)\3(.)\4$/.test(tail)) {
-			type = "QuadPairs";
-			label = `Quad Pairs (AABBCCDD)`;
-			bonus = 110;
-			score = 88;
-			patternFloor = Math.max(patternFloor, 18000);
-		}
-	}
-
-	// Mirror / Radar (e.g. 1234 4321)
-	if (type === "Standard" && tail.length >= 6) {
-		const part = tail.slice(0, tail.length % 2 === 0 ? tail.length : tail.length - 1);
-		if (part.length >= 6 && part === part.split("").reverse().join("")) {
-			type = "Mirror";
-			label = `Mirror (${part})`;
-			bonus = 120;
-			score = 89;
-			patternFloor = Math.max(patternFloor, 20000);
-		}
-	}
-
-	// Birth Year (e.g. ...1995, ...2024)
-	if (type === "Standard" && tail.length >= 4) {
-		const yearSuffix = tail.slice(-4);
-		const yearVal = parseInt(yearSuffix, 10);
-		if (yearVal >= 1950 && yearVal <= 2030) {
-			type = "Year";
-			label = `Year Suffix (${yearSuffix})`;
-			bonus = 40;
-			score = 72;
-			patternFloor = Math.max(patternFloor, 1500);
-		}
-	}
-
-	if (type === "Standard") {
-		const lucky7 = (tail.match(/7/g) || []).length;
-		const lucky8 = (tail.match(/8/g) || []).length;
-		const luckyCount = lucky7 + lucky8;
-		if (luckyCount >= 4) {
-			type = "Lucky";
-			patternFloor = Math.max(patternFloor, luckyCount >= 5 ? 8000 : 3500);
-			bonus = 25 + luckyCount * 5;
-			label = `Lucky (${lucky7}×7 ${lucky8}×8)`;
-			score = 65 + Math.min(25, luckyCount * 3);
+			patternFloor = 120000;
 		} else {
-			const n = parseInt(tail, 10);
-			if (n % 1000 === 0 && n > 0) {
-				type = "Round";
-				bonus = 40;
-				label = "Round number (Ends in 000)";
-				score = 70;
-				patternFloor = Math.max(patternFloor, 3000);
-			} else if (uniqueCount <= 3) {
-				type = "Premium";
-				bonus = 30;
-				label = `Low-Unique (${uniqueCount} digits)`;
-				score = 72;
-				patternFloor = Math.max(patternFloor, 3500);
-			}
+			tier = "Elite";
+			label = "Standard Ultra-Short";
+			bonus = 150;
+			patternFloor = 80000;
+		}
+		
+		// Additional bonus for 777 or 888 sequences within short numbers
+		if (tail.includes("777") || tail.includes("888")) {
+			bonus += 100;
+			patternFloor *= 1.5;
+		}
+
+		return { type: tier, bonus, label, score, uniqueCount, patternFloor };
+	}
+
+	// 2. STANDARD 11-DIGIT PATTERNS
+	if (tail.length === 8) {
+		const numVal = parseInt(tail, 10);
+		
+		// SOLID / REPDIGIT
+		if (uniqueCount === 1) {
+			tier = "Grail";
+			label = `Solid 8 (XXXXXXXX)`;
+			bonus = 450;
+			score = 99;
+			patternFloor = 150000;
+		}
+		// 7-ENDING
+		else if (/^.(.)\1{6}$/.test(tail)) {
+			tier = "Elite";
+			label = "7-Ending Stream";
+			bonus = 250;
+			score = 92;
+			patternFloor = 45000;
+		}
+		// REPEATING BLOCKS
+		else if (/^(.)\1{3}(.)\2{3}$/.test(tail)) {
+			tier = "Elite";
+			label = "Quad-Blocks (XXXX YYYY)";
+			bonus = 180;
+			patternFloor = 25000;
+		}
+		// LADDERS
+		else if (/^(01234567|12345678|23456789|98765432|87654321|76543210)$/.test(tail)) {
+			tier = "Elite";
+			label = "Perfect Ladder";
+			bonus = 220;
+			patternFloor = 35000;
+		}
+		// MIRROR / RADAR
+		else if (tail === tail.split("").reverse().join("")) {
+			tier = "Premium";
+			label = "Golden Radar (8-Digit)";
+			bonus = 140;
+			patternFloor = 15000;
+		}
+		// CLUBS (1K, 10K)
+		else if (numVal < 1000) {
+			tier = "Elite";
+			label = "1K Club (+888 0000 0)";
+			bonus = 200;
+			patternFloor = 50000;
+		} else if (numVal < 10000) {
+			tier = "Premium";
+			label = "10K Club (+888 0000)";
+			bonus = 120;
+			patternFloor = 20000;
+		}
+		// CONSECUTIVES fallback
+		else if (consecutiveCount >= 5) {
+			tier = "Premium";
+			label = `Consecutive ${consecutiveCount} Digits`;
+			bonus = consecutiveCount * 25;
+			patternFloor = consecutiveCount === 5 ? 12000 : consecutiveCount === 6 ? 45000 : 100000;
+		}
+		// LUCKY COMBO
+		else if (luckyCount >= 5) {
+			tier = "Premium";
+			label = `Super Lucky (${luckyCount}x 7/8)`;
+			bonus = luckyCount * 15;
+			patternFloor = Math.max(patternFloor, luckyCount * 2000);
+		}
+		// LOW UNIQUE
+		else if (uniqueCount <= 2) {
+			tier = "Premium";
+			label = "Double-Digit Only";
+			bonus = 80;
+			patternFloor = 8000;
+		}
+		// ROUND NUMBERS
+		else if (tail.endsWith("0000")) {
+			tier = "Premium";
+			label = "Quad-Zero Ending";
+			bonus = 100;
+			patternFloor = 12000;
 		}
 	}
 
-	return { type, bonus, label, score, uniqueCount, patternFloor };
+	// Score normalization based on tier
+	score = tier === "Grail" ? 98 : tier === "Elite" ? 90 : tier === "Premium" ? 75 : 40;
+	if (bonus > 0 && tier === "Standard") tier = "Premium";
+
+	return { type: tier, bonus, label, score, uniqueCount, patternFloor };
 }
 
 /**
@@ -452,17 +354,66 @@ async function scrapeFragmentNumber(numberClean) {
 		                  html.match(/address\/(\w+)/);
 		const owner = ownerMatch ? ownerMatch[1] : null;
 
-		// 5. Last Sale Price detection
-		// If on search result page (for anonymous numbers), the first price found is the last event price
-		let lastSale = (status === "sold" && prices.length > 0) ? prices[0] : null;
-		if (isAnonymous && prices.length > 0 && !lastSale) {
+		// 5. Deep Extraction of History and Last Sale
+		const scrapedHistory = [];
+		
+		// For Search Results (Anonymous Numbers often end up here)
+		const tableRowMatches = html.matchAll(/<tr[^>]*class="tm-table-row"[^>]*>([\s\S]*?)<\/tr>/g);
+		for (const row of tableRowMatches) {
+			const rowHtml = row[1];
+			const priceMatch = rowHtml.match(/icon-ton">([\d,]+(?:\.\d+)?)<\/div>/);
+			const dateMatch = rowHtml.match(/<time[^>]*datetime="([^"]+)"[^>]*>([\s\S]*?)<\/time>/) || 
+			                 rowHtml.match(/<div[^>]*class="tm-date"[^>]*>([\s\S]*?)<\/div>/);
+			
+			if (priceMatch) {
+				scrapedHistory.push({
+					price: safeNum(priceMatch[1], null),
+					date: dateMatch ? (dateMatch[2] || dateMatch[1]).trim().replace(/&nbsp;/g, " ") : "Recent",
+					fullDate: dateMatch ? dateMatch[1] : null
+				});
+			}
+		}
+
+		// For Single Item Page (Transaction History section)
+		const gridRowMatches = html.matchAll(/tm-table-grid-row">([\s\S]*?)<\/div>\s*<\/div>/g);
+		for (const row of gridRowMatches) {
+			const rowHtml = row[1];
+			const priceMatch = rowHtml.match(/icon-ton">([\d,]+(?:\.\d+)?)<\/div>/);
+			const dateMatch = rowHtml.match(/tm-datetime[^>]*>([\s\S]*?)<\/div>/);
+			if (priceMatch && !scrapedHistory.some(h => h.price === safeNum(priceMatch[1], null))) {
+				scrapedHistory.push({
+					price: safeNum(priceMatch[1], null),
+					date: dateMatch ? dateMatch[1].trim() : "Recent"
+				});
+			}
+		}
+
+		let lastSale = null;
+		let lastSaleDate = null;
+		if (scrapedHistory.length > 0) {
+			lastSale = scrapedHistory[0].price;
+			lastSaleDate = scrapedHistory[0].date;
+		} else if (status === "sold" && prices.length > 0) {
 			lastSale = prices[0];
+			// Try to find a header date
+			const headerDate = html.match(/tm-section-header-date">([\s\S]*?)<\/div>/);
+			lastSaleDate = headerDate ? headerDate[1].trim() : null;
 		}
 
 		const highestBid = status === "on_auction" && prices.length >= 1 ? prices[0] : null;
 		const minBid = status === "on_auction" && prices.length >= 3 ? prices[2] : null;
 
-		return { status, priceTon: priceTon, highestBid, minBid, url: baseUrl, owner, lastSale };
+		return { 
+			status, 
+			priceTon: priceTon, 
+			highestBid, 
+			minBid, 
+			url: baseUrl, 
+			owner, 
+			lastSale, 
+			lastSaleDate,
+			history: scrapedHistory 
+		};
 	} catch (e) {
 		console.warn("⚠️ Fragment number scrape failed:", e.message);
 		return { status: "unknown", priceTon: null, url: baseUrl };
@@ -568,6 +519,23 @@ function estimateWithModel({
 	const targetUniq = pattern.uniqueCount ?? new Set(targetTail.split("")).size;
 	const patternFloor = pattern.patternFloor || floor;
 
+	// find similar-pattern prices in our database for better anchoring
+	const dbSimilarPrices = [];
+	if (numbersDatabase) {
+		for (const [num, price] of numbersDatabase.entries()) {
+			const tail = num.slice(3);
+			if (tail.length !== targetTail.length) continue;
+			
+			const lucky = (tail.match(/[78]/g) || []).length;
+			const uniq = new Set(tail.split("")).size;
+			
+			if (lucky === targetLucky && uniq === targetUniq) {
+				dbSimilarPrices.push(price);
+			}
+		}
+	}
+	const dbPatternMedian = median(dbSimilarPrices);
+
 	const scored = marketSample
 		.map((it) => {
 			const tail = it.numberClean.slice(3);
@@ -589,39 +557,44 @@ function estimateWithModel({
 	const weights = [];
 
 	anchors.push(patternFloor);
-	weights.push(1.5); // Add category floor as anchor
+	weights.push(1.8); // High weight for category floor
+
 	anchors.push(floor);
 	weights.push(1.0);
+
 	if (marketMedian) {
 		anchors.push(marketMedian);
 		weights.push(1.2);
 	}
 	if (compMedian) {
 		anchors.push(compMedian);
-		weights.push(1.6);
+		weights.push(2.0); // Boosted comparison weight
 	}
+
+	if (dbPatternMedian) {
+		anchors.push(dbPatternMedian);
+		weights.push(2.5); // Very high weight for historical similarity
+	}
+
 	anchors.push(base * patternMultiplier);
 	weights.push(1.4);
 
 	if (numbersDatabase?.has(numberClean)) {
 		const dbPrice = numbersDatabase.get(numberClean);
 		anchors.push(dbPrice);
-		weights.push(3.0);
+		weights.push(5.0); // Absolute anchor if exact match
 	}
 
 	if (scraped.status === "for_sale" && Number.isFinite(scraped.priceTon)) {
-		const clampBase = compMedian || marketMedian || floor;
-		anchors.push(clamp(scraped.priceTon, clampBase * 0.6, clampBase * 3.5));
+		const clampBase = dbPatternMedian || compMedian || marketMedian || floor;
+		anchors.push(clamp(scraped.priceTon, clampBase * 0.7, clampBase * 2.5));
 		weights.push(2.2);
 	}
+	
 	if (scraped.status === "on_auction") {
 		if (Number.isFinite(scraped.highestBid)) {
 			anchors.push(scraped.highestBid);
 			weights.push(2.0);
-		}
-		if (Number.isFinite(scraped.minBid)) {
-			anchors.push(scraped.minBid);
-			weights.push(1.4);
 		}
 	}
 
@@ -633,15 +606,15 @@ function estimateWithModel({
 	let est = median(expanded) || base * patternMultiplier;
 
 	// Strict enforcement: Estimate must never fall below the Category Pattern Floor
-	est = Math.max(est, patternFloor * 1.05); // Add 5% premium above floor for specific instance
+	est = Math.max(est, patternFloor * 1.05); 
 
 	let confidence = 35;
-	if (marketMedian) confidence += 15;
-	if (compMedian) confidence += 20;
-	if (scraped.status === "for_sale" && scraped.priceTon) confidence += 20;
-	if (scraped.status === "on_auction" && (scraped.highestBid || scraped.minBid))
-		confidence += 15;
-	confidence = clamp(confidence, 20, 90);
+	if (marketMedian) confidence += 10;
+	if (dbPatternMedian) confidence += 20;
+	if (compMedian) confidence += 15;
+	if (scraped.status === "for_sale" || scraped.status === "sold") confidence += 20;
+	
+	confidence = clamp(confidence, 25, 95);
 
 	const compSpread =
 		compMedian && k.length >= 6
@@ -649,13 +622,13 @@ function estimateWithModel({
 					(Math.max(...k.map((x) => x.price)) -
 						Math.min(...k.map((x) => x.price))) /
 						compMedian,
-					0.15,
-					0.55,
+					0.1,
+					0.5,
 				)
-			: 0.35;
+			: 0.3;
 	const rangePct = clamp(
-		0.22 + (1 - confidence / 100) * 0.25 + compSpread * 0.15,
-		0.22,
+		0.2 + (1 - confidence / 100) * 0.3 + compSpread * 0.1,
+		0.15,
 		0.45,
 	);
 
@@ -781,17 +754,49 @@ export async function generateNumberReport(input, tonPrice = 5.5) {
 	report += `\n`;
 	report += `🔗 [Fragment](${url})\n\n`;
 
-	// Extract last sale from See.tg history if Fragment check was incomplete
+	// Merge and deduplicate History (See.tg + Scraped Fragment)
+	let combinedHistory = [];
+	
+	// Add See.tg history
+	if (history && history.length > 0) {
+		history.forEach(t => {
+			combinedHistory.push({
+				price: t.price,
+				date: t.date ? new Date(t.date).toLocaleDateString() : "Unknown",
+				source: "See.tg"
+			});
+		});
+	}
+
+	// Add Scraped history if not already present
+	if (scraped.history && scraped.history.length > 0) {
+		scraped.history.forEach(s => {
+			const exists = combinedHistory.some(c => Math.abs((c.price || 0) - (s.price || 0)) < 0.1);
+			if (!exists) {
+				combinedHistory.push({
+					price: s.price,
+					date: s.date,
+					source: "Fragment"
+				});
+			}
+		});
+	}
+
+	// Extract last sale for Market Snapshot
 	let lastSalePrice = scraped.lastSale;
-	if (!lastSalePrice && history && history.length > 0) {
-		const lastValid = history.find(t => t.price && t.price > 0);
-		if (lastValid) lastSalePrice = lastValid.price;
+	let lastSaleDate = scraped.lastSaleDate;
+	
+	if (!lastSalePrice && combinedHistory.length > 0) {
+		const lastValid = combinedHistory[0];
+		lastSalePrice = lastValid.price;
+		lastSaleDate = lastValid.date;
 	}
 
 	report += `――――― 📊 *MARKET SNAPSHOT* ―――――\n`;
 	report += `▸ Status: ${statusDisplay}\n`;
 	if (lastSalePrice) {
-		report += `▸ Last Sale: *${formatNumber(lastSalePrice)} TON*\n`;
+		const dateStr = lastSaleDate ? ` (${lastSaleDate})` : "";
+		report += `▸ Last Sale: *${formatNumber(lastSalePrice)} TON*${dateStr} 🏆\n`;
 	}
 	if (scraped.owner) {
 		const shortAddr = `${scraped.owner.substring(0, 8)}...${scraped.owner.slice(-6)}`;
@@ -855,10 +860,14 @@ export async function generateNumberReport(input, tonPrice = 5.5) {
 	report += `\n`;
 
 	report += `――――― 🧠 *EXPERT NOTE* ―――――\n`;
-	if (pattern.type === "Standard") {
-		report += `Standard Anonymous Number. Value primarily driven by collection floor. Limited vanity premium.\n`;
+	if (pattern.type === "Grail") {
+		report += `💎 **GRAIL ALERT:** Highest possible collector tier. This pattern is exceptionally rare and price performance is top-tier.\n`;
+	} else if (pattern.type === "Elite") {
+		report += `🏆 **ELITE PATTERN:** Significant vanity premium. This number holds value independent of the collection floor.\n`;
+	} else if (pattern.type === "Premium") {
+		report += `⭐ **PREMIUM:** Solid vanity pattern. Better liquidity and higher floor support compared to standard numbers.\n`;
 	} else {
-		report += `High-quality ${pattern.label} pattern. Significant collector appeal and price support above floor.\n`;
+		report += `Standard Anonymous Number. Value primarily driven by collection floor. Limited vanity premium.\n`;
 	}
 
 	report += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
@@ -870,19 +879,12 @@ export async function generateNumberReport(input, tonPrice = 5.5) {
 		number,
 		formattedNumber,
 		numberClean,
-		priceTon: priceTon || estimated,
-		estimatedValue: estimated,
+		priceTon: priceTon || estRes.est,
+		estimatedValue: estRes.est,
 		floor,
 		status,
 		pattern: pattern.type,
-		verdict:
-			pattern.type === "Standard"
-				? "STANDARD"
-				: pattern.type === "Repdigit"
-					? "GRAIL"
-					: pattern.type === "Lucky"
-						? "LUCKY"
-						: "PREMIUM",
+		verdict: pattern.type.toUpperCase(),
 		vsFloor,
 		momentum: {
 			change24h: momentum?.floorChange24h || 0,
