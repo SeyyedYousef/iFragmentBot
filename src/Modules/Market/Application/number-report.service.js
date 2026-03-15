@@ -11,6 +11,7 @@ import * as scraplingService from "../../../Shared/Infra/Scraping/scrapling.serv
 import { getBrowser } from "../../../Shared/UI/Components/card-generator.component.js";
 import * as seetgService from "../../Automation/Application/seetg.service.js";
 import * as marketService from "./market.service.js";
+import * as telegramClient from "../../../Shared/Infra/Telegram/telegram.client.js";
 
 // Global cached numbers CSV data
 let numbersDatabase = null;
@@ -451,13 +452,17 @@ async function scrapeFragmentNumber(numberClean) {
 		                  html.match(/address\/(\w+)/);
 		const owner = ownerMatch ? ownerMatch[1] : null;
 
-		// 5. Last Sale Price (if status is sold, first price is often last sale)
-		const lastSale = (status === "sold" && prices.length > 0) ? prices[0] : null;
+		// 5. Last Sale Price detection
+		// If on search result page (for anonymous numbers), the first price found is the last event price
+		let lastSale = (status === "sold" && prices.length > 0) ? prices[0] : null;
+		if (isAnonymous && prices.length > 0 && !lastSale) {
+			lastSale = prices[0];
+		}
 
 		const highestBid = status === "on_auction" && prices.length >= 1 ? prices[0] : null;
 		const minBid = status === "on_auction" && prices.length >= 3 ? prices[2] : null;
 
-		return { status, priceTon, highestBid, minBid, url: baseUrl, owner, lastSale };
+		return { status, priceTon: priceTon, highestBid, minBid, url: baseUrl, owner, lastSale };
 	} catch (e) {
 		console.warn("⚠️ Fragment number scrape failed:", e.message);
 		return { status: "unknown", priceTon: null, url: baseUrl };
@@ -737,21 +742,21 @@ export async function generateNumberReport(input, tonPrice = 5.5) {
 	let statusDisplay = "NOT LISTED";
 	if (status === "for_sale") statusDisplay = "💰 FOR SALE";
 	else if (status === "on_auction") statusDisplay = "🔨 ON AUCTION";
-	else if (status === "sold") statusDisplay = "✅ SOLD";
+	else if (status === "sold") statusDisplay = "NOT LISTED";
 	else if (status === "available") statusDisplay = "✨ AVAILABLE";
 	else if (status === "not_found") statusDisplay = "❌ NOT FOUND";
 
-	// Check registration (optional - may fail if no MTProto)
+	// Check registration via Telegram MTProto
 	let registeredText = "⏳ Unknown";
 	try {
-		const { checkPhoneNumber } = await import(
-			"../../Shared/Infra/Telegram/telegram.client.js"
-		);
-		const reg = await checkPhoneNumber(number);
-		registeredText = reg.registered ? "✅ Yes" : "❌ No";
-	} catch {
-		registeredText = "⏳ N/A";
+		const check = await telegramClient.checkPhoneNumber(number);
+		registeredText = check.registered ? "✅ Registered" : "❌ Not Active";
+	} catch (e) {
+		console.warn("⚠️ Telegram registration check failed:", e.message);
+		registeredText = "⏳ Service Busy";
 	}
+
+
 
 	// Fetch History from See.tg
 	let history = [];
@@ -772,18 +777,22 @@ export async function generateNumberReport(input, tonPrice = 5.5) {
 	report += `📱 *${formattedNumber}*\n`;
 	report += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
 	report += `🔵 ${statusDisplay}`;
-	if (priceTon) report += `  •  Price: *${formatNumber(priceTon)} TON*`;
+	if (priceTon && (status === "for_sale" || status === "on_auction")) report += `  •  Price: *${formatNumber(priceTon)} TON*`;
 	report += `\n`;
 	report += `🔗 [Fragment](${url})\n\n`;
 
+	// Extract last sale from See.tg history if Fragment check was incomplete
+	let lastSalePrice = scraped.lastSale;
+	if (!lastSalePrice && history && history.length > 0) {
+		const lastValid = history.find(t => t.price && t.price > 0);
+		if (lastValid) lastSalePrice = lastValid.price;
+	}
+
 	report += `――――― 📊 *MARKET SNAPSHOT* ―――――\n`;
 	report += `▸ Status: ${statusDisplay}\n`;
-	if (scraped.lastSale) {
-		report += `▸ Last Sale: *${formatNumber(scraped.lastSale)} TON*\n`;
-	} else if (priceTon && status === "sold") {
-		report += `▸ Last Sale: *${formatNumber(priceTon)} TON*\n`;
+	if (lastSalePrice) {
+		report += `▸ Last Sale: *${formatNumber(lastSalePrice)} TON*\n`;
 	}
-	report += `▸ Fragment: [link](${url})\n`;
 	if (scraped.owner) {
 		const shortAddr = `${scraped.owner.substring(0, 8)}...${scraped.owner.slice(-6)}`;
 		report += `▸ Owner: \`${shortAddr}\`\n`;
@@ -815,13 +824,15 @@ export async function generateNumberReport(input, tonPrice = 5.5) {
 
 	report += `▸ 📊 Confidence: *${model.confidence >= 70 ? "High" : model.confidence >= 50 ? "Medium" : "Low"}* (${model.confidence}%)\n\n`;
 
-	report += `――――― 👥 *HOLDER INSIGHTS* ―――――\n`;
-	report += `▸ 📱 Registered: ${registeredText}\n`;
-	report += `▸ 🏛️ Status: ${statusDisplay}\n`;
 	if (scraped.owner) {
+		report += `――――― 👥 *HOLDER INSIGHTS* ―――――\n`;
+		report += `▸ 📱 Registered: ${registeredText}\n`;
 		report += `▸ 👤 Owner: \`${scraped.owner.substring(0, 8)}...${scraped.owner.slice(-6)}\`\n`;
+		report += `\n`;
+	} else {
+		report += `――――― 👥 *HOLDER INSIGHTS* ―――――\n`;
+		report += `▸ 📱 Registered: ${registeredText}\n\n`;
 	}
-	report += `\n`;
 
 	if (history && history.length > 0) {
 		report += `――――― 📜 *HISTORY* ―――――\n`;
@@ -873,7 +884,6 @@ export async function generateNumberReport(input, tonPrice = 5.5) {
 						? "LUCKY"
 						: "PREMIUM",
 		vsFloor,
-		registeredText,
 		momentum: {
 			change24h: momentum?.floorChange24h || 0,
 			volume24h: momentum?.volume24h ? Math.round(momentum.volume24h / 1e9) : 0,

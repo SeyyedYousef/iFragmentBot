@@ -2377,7 +2377,6 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 		verdict: estimation.verdict,
 		imageUrl: imageUrl,
 		color: attributeDetails.backdrop ? attributeDetails.backdrop.value : null,
-		similarGifts,
 		ownerHistory: seetgData.transfers || [],
 	};
 }
