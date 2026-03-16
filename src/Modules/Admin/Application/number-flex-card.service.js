@@ -219,12 +219,22 @@ export async function generateNumberFlexCard(numberData) {
                     <div class="stat-value">${numberData.floor} TON</div>
                 </div>
                 <div class="stat-box">
-                    <div class="stat-label">Alpha</div>
-                    <div class="stat-value violet">${numberData.vsFloor}</div>
+                    <div class="stat-label">Rarity</div>
+                    <div class="stat-value violet">${numberData.rarityScore}/100</div>
                 </div>
                 <div class="stat-box">
-                    <div class="stat-label">Trust</div>
+                    <div class="stat-label">Confidence</div>
                     <div class="stat-value violet">${numberData.confidence}</div>
+                </div>
+            </div>
+
+            <div class="valuation-panel" style="margin-top: 20px; padding: 25px;">
+                <div class="val-group">
+                    <div class="val-label">Whale Watch</div>
+                    <div class="val-amount" style="font-size: 32px;">${numberData.whaleStatus}</div>
+                </div>
+                <div class="status-chips">
+                    <div class="status-chip">Alpha <span>${numberData.vsFloor}</span></div>
                 </div>
             </div>
         </div>

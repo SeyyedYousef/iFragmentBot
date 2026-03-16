@@ -623,20 +623,19 @@ async function initAndLaunch() {
 			});
 
 			try {
+				const vsFloorVal = typeof result.vsFloor === 'number' ? result.vsFloor : 0;
 				const cardData = {
 					number: result.number,
 					formattedNumber: result.formattedNumber,
 					price: formatNumber(Math.round(result.estimatedValue)),
-					verdict: result.verdict || "STANDARD",
+					verdict: result.rarityRank || result.verdict || "STANDARD",
 					status: (result.status || "").toUpperCase(),
 					floor: formatNumber(Math.round(result.floor || 0)),
-					vsFloor: `${result.vsFloor >= 0 ? "+" : ""}${result.vsFloor.toFixed(0)}%`,
-					pattern: result.pattern || "",
-					confidence: (result.report || "").includes("Confidence: *High*")
-						? "High"
-						: (result.report || "").includes("Confidence: *Medium*")
-							? "Medium"
-							: "Low",
+					vsFloor: `${vsFloorVal >= 0 ? "+" : ""}${vsFloorVal.toFixed(0)}%`,
+					pattern: result.patternLabel || result.pattern || "",
+					confidence: result.confidence >= 80 ? "High" : result.confidence >= 50 ? "Medium" : "Low",
+					rarityScore: result.rarityScore || 0,
+					whaleStatus: result.ownerLabel || "Standard Holder"
 				};
 				let imageBuffer = await generateNumberFlexCard(cardData);
 				if (!Buffer.isBuffer(imageBuffer))

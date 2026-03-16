@@ -12,6 +12,7 @@ import * as telegramClient from "../../../Shared/Infra/Telegram/telegram.client.
 import { getBrowser } from "../../../Shared/UI/Components/card-generator.component.js";
 import * as seetgService from "../../Automation/Application/seetg.service.js";
 import * as marketService from "./market.service.js";
+import * as portfolioService from "./portfolio.service.js";
 
 // Global cached numbers CSV data
 let numbersDatabase = null;
@@ -210,9 +211,15 @@ function analyzeNumberPattern(numberClean, globalFloor = 850) {
 	}
 
 	score = tier === "Grail" ? 98 : tier === "Elite" ? 90 : tier === "Premium" ? 75 : 40;
-	if (bonus > 0 && tier === "Standard") tier = "Premium";
+	
+	// Add slight variance based on digits
+	if (uniqueCount <= 2) score += 5;
+	if (luckyCount >= 4) score += 3;
+	score = clamp(score, 10, 99);
 
-	return { type: tier, bonus, label, score, uniqueCount, patternFloor };
+	const rarityRank = score >= 95 ? "Top 0.1%" : score >= 90 ? "Top 1%" : score >= 80 ? "Top 5%" : score >= 60 ? "Top 15%" : "Top 40%";
+
+	return { type: tier, bonus, label, score, uniqueCount, patternFloor, rarityRank };
 }
 
 /**
@@ -236,10 +243,11 @@ async function scrapeFragmentNumber(numberClean) {
 		}
 
 		let status = "available";
-		if (html.includes('"status":"sold"') || html.includes(">Sold<") || html.includes("tm-status-sold")) status = "sold";
+		if (html.includes('"status":"sold"') || html.includes(">Sold<") || html.includes("tm-status-sold") || html.includes("tm-status-resale")) status = "sold";
 		else if (html.includes(">Unavailable<") || html.includes("tm-status-unavail")) status = "available";
 		else if (html.includes(">On auction<") || html.includes("tm-status-on-auction")) status = "on_auction";
 		else if (html.includes(">For sale<") || html.includes("tm-status-for-sale")) status = "for_sale";
+		else if (html.includes(">Sold<") || html.includes("status-sold")) status = "sold";
 
 		const priceMatches = [...html.matchAll(/icon-ton">([\d,]+(?:\.\d+)?)<\/div>/g)];
 		const prices = priceMatches.map(m => safeNum(m[1], null)).filter(p => p > 0);
@@ -261,7 +269,7 @@ async function scrapeFragmentNumber(numberClean) {
 			const dMatch = rowHtml.match(/tm-datetime[^>]*>([\s\S]*?)<\/div>/);
 			const aMatch = rowHtml.match(/tm-char-type">([\s\S]*?)<\/div>/);
 			const action = aMatch ? aMatch[1].trim().toLowerCase() : "";
-			if (pMatch && (action.includes("sale") || action.includes("auction") || action.includes("transfer"))) {
+			if (pMatch && (action.includes("sale") || action.includes("auction") || action.includes("transfer") || action.includes("sold"))) {
 				scrapedHistory.push({ price: safeNum(pMatch[1], null), date: dMatch ? dMatch[1].trim() : "Recent", source: "Fragment" });
 			}
 		}
@@ -448,7 +456,11 @@ export async function generateNumberReport(input, tonPrice = 5.5) {
 	} catch (e) {}
 
 	const estUsd = Math.round(estimated * tonPrice);
-	const statusDisplay = scraped.status === "for_sale" ? "💰 FOR SALE" : scraped.status === "on_auction" ? "🔨 ON AUCTION" : "🔵 NOT LISTED";
+	const statusDisplay =
+		scraped.status === "for_sale" ? "💰 FOR SALE" :
+		scraped.status === "on_auction" ? "🔨 ON AUCTION" :
+		scraped.status === "sold" ? "✅ SOLD" :
+		"🔵 NOT LISTED";
 
 	let report = "";
 	report += `📱 *${formattedNumber}*\n`;
@@ -500,9 +512,28 @@ export async function generateNumberReport(input, tonPrice = 5.5) {
 	}
 	report += `\n`;
 
+	// --- WHALE WATCH & OWNER INSIGHTS ---
+	let otherNumbersCount = 0;
+	let ownerLabel = "Standard Holder";
+	if (scraped.owner) {
+		try {
+			const port = await portfolioService.getPortfolio(scraped.owner);
+			if (port && port.anonymousNumbers) {
+				otherNumbersCount = port.anonymousNumbers.length;
+				if (otherNumbersCount >= 10) ownerLabel = "🐋 MEG-WHALE";
+				else if (otherNumbersCount >= 5) ownerLabel = "🐬 WHALE";
+				else if (otherNumbersCount >= 2) ownerLabel = "🐙 COLLECTOR";
+			}
+		} catch (e) {}
+	}
+
 	report += `――――― 👥 *HOLDER INSIGHTS* ―――――\n`;
 	report += `▸ 📱 Registered: ${registeredText}\n`;
-	if (scraped.owner) report += `▸ 👤 Owner: \`${scraped.owner.substring(0, 8)}...${scraped.owner.slice(-6)}\`\n`;
+	if (scraped.owner) {
+		report += `▸ 👤 Owner: \`${scraped.owner.substring(0, 8)}...${scraped.owner.slice(-6)}\`\n`;
+		report += `▸ 🏷️ Type: *${ownerLabel}*\n`;
+		if (otherNumbersCount > 1) report += `▸ 📦 Collection: *Holds ${otherNumbersCount} numbers*\n`;
+	}
 	report += `\n`;
 
 	if (scraped.history && scraped.history.length > 0) {
@@ -515,6 +546,7 @@ export async function generateNumberReport(input, tonPrice = 5.5) {
 
 	report += `――――― 🎰 *NUMBER PATTERN* ―――――\n`;
 	report += `▸ Type: *${pattern.label}*\n`;
+	report += `▸ Rarity: *${pattern.rarityRank}* (${pattern.score}/100)\n`;
 	report += `▸ Pattern Floor: *${formatNumber(pattern.patternFloor)} TON*\n`;
 	if (pattern.bonus > 0) report += `▸ Bonus: +${pattern.bonus}%\n\n`;
 
@@ -522,5 +554,24 @@ export async function generateNumberReport(input, tonPrice = 5.5) {
 	report += `⚡ _Intelligence by @iFragmentBot_  •  TON: $${tonPrice.toFixed(2)}\n`;
 	report += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
 
-	return { report, number, formattedNumber, numberClean, priceTon: scraped.priceTon || estimated, estimatedValue: estimated, floor, status: scraped.status, pattern: pattern.type, owner: scraped.owner, url: scraped.url };
+	return {
+		report,
+		number,
+		formattedNumber,
+		numberClean,
+		priceTon: scraped.priceTon || estimated,
+		estimatedValue: estimated,
+		floor,
+		vsFloor,
+		status: scraped.status,
+		pattern: pattern.type,
+		patternLabel: pattern.label,
+		owner: scraped.owner,
+		url: scraped.url,
+		confidence: model.confidence,
+		rarityScore: pattern.score,
+		rarityRank: pattern.rarityRank,
+		ownerLabel,
+		otherNumbersCount
+	};
 }
