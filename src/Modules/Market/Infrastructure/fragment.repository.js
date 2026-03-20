@@ -1,4 +1,4 @@
-﻿import { existsSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createPool } from "generic-pool";
@@ -7,8 +7,8 @@ import puppeteer from "puppeteer";
 import {
 	CONFIG,
 	GOLDEN_DICTIONARY,
-	getSuggestions,
 } from "../../../core/Config/app.config.js";
+import { getSuggestions } from "../Application/oracle.service.js";
 import { fragmentLimiter } from "../../../Shared/Infra/Network/rate-limiter.service.js";
 import { scraplingFetchFragment } from "../../../Shared/Infra/Scraping/scrapling.service.js";
 
@@ -211,10 +211,40 @@ function hasMeaningfulFragmentData(data) {
  * "Super Prompt" Optimization: Drastically reduces resource usage and timeouts on Render
  */
 export async function scrapeFragment(username) {
-	// Use rate limiter to control concurrent scraping
 	return fragmentLimiter.schedule(async () => {
 		const cleanUsername = username.replace("@", "").trim().toLowerCase();
-		console.log(`🔍 Scraping @${cleanUsername}...`);
+		console.log(`🔍 [2026 SUPREME] Scraping @${cleanUsername}...`);
+
+		// 1. FAST PATH: HTTP Scrape (No Puppeteer)
+		try {
+			const httpData = await scrapeFragmentHttp(cleanUsername);
+			if (hasMeaningfulFragmentData(httpData)) {
+				console.log(`⚡ HTTP Scrape SUCCESS for @${cleanUsername}`);
+				return httpData;
+			}
+		} catch (httpError) {
+			console.warn(`⚠️ HTTP Failed: ${httpError.message}`);
+		}
+
+		// 2. MODERN PATH: Scrapling (Stealth Headless Chrome via Python Engine)
+		try {
+			const scraplingData = await scrapeFragmentScrapling(cleanUsername);
+			if (hasMeaningfulFragmentData(scraplingData)) {
+				console.log(`🕵️ Scrapling SUCCESS for @${cleanUsername}`);
+				return scraplingData;
+			}
+		} catch (scraplingError) {
+			console.warn(`⚠️ Scrapling Failed: ${scraplingError.message}`);
+		}
+
+		// 3. FINAL FALLBACK: Meaningful metadata check
+		console.log(`⚠️ All scrapers exhausted for @${cleanUsername}`);
+		return _createEmptyScrapeResult(cleanUsername, true);
+
+		// [LEGACY PUPPETEER BELOW - DISABLED BY RETURN ABOVE]
+		const _cleanUsername = username.replace("@", "").trim().toLowerCase();
+		console.log(`🔍 Scraping @${_cleanUsername}...`);
+
 
 		// 1. FAST PATH: HTTP Scrape (No Puppeteer)
 		// This handles 90% of cases instantly without launching a browser
@@ -1408,83 +1438,104 @@ function _selectDeterministic(arr, username) {
 }
 
 /**
- * Generate a "Dynamic Truth" insight using AI
- * GUARANTEED to be unique and unparalleled every single time.
+ * Generate a "Dynamic Truth" insight using AI (Legacy/Sync)
  */
 export async function generateShortInsight(username) {
 	const cleanUsername = username.replace("@", "").toLowerCase();
+	if (GOLDEN_DICTIONARY?.[cleanUsername]) return `💎 ${GOLDEN_DICTIONARY[cleanUsername]}`;
 
-	// 1. GOLDEN DICTIONARY CHECK (Fastest & Most Accurate)
-	// If the word is in our massive curated database, use that definition.
-	if (GOLDEN_DICTIONARY?.[cleanUsername]) {
-		console.log(`✨ Using Golden Definition for @${cleanUsername}`);
-		return `💎 ${GOLDEN_DICTIONARY[cleanUsername]}`;
-	}
-
-	// 2. UNIQUE AI GENERATION (The Primary Engine)
 	try {
-		// Dynamic prompt for "Ultimate Linguistic Precision"
-		const prompt = `Analyze the username "@${cleanUsername}" with UNPARALLELED LINGUISTIC DEPTH.
-ROLE: You are the world's greatest etymologist and brand strategist.
-RULES:
-1. IF COMPOUND (e.g. "SmartBot"): Explain the synergy of combining '${cleanUsername.slice(0, Math.floor(cleanUsername.length / 2))}' and the suffix/prefix.
-2. IF SINGLE WORD: Define its absolute core meaning and its premium implication.
-3. TONE: Intelligent, Authoritative, Premium, Sharp. (NOT poetic, NOT flowery).
-4. NO generic fluff like "This handle is...". Go straight to the definition.
-5. Language: STRICTLY ENGLISH ONLY.
-6. CONTENT: Explain EXACTLY what the word means and why it commands value.
-7. Length: A single, flawless sentence (12-25 words).
-8. Variation Seed: ${Date.now()}`;
+		const apiKey = CONFIG.GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+		if (!apiKey || apiKey === "YOUR_GEMINI_API_KEY_HERE") throw new Error("No API Key");
 
-		const url = `${CONFIG.POLLINATIONS_TEXT_API}/${encodeURIComponent(prompt)}?model=openai`;
-
-		// Timeout 5s - we want speed, but quality takes a moment
-		const controller = new AbortController();
-		const timeoutId = setTimeout(() => controller.abort(), 5000);
+		const prompt = `Analyze @${cleanUsername} with BRAND STRATEGY depth. English. Precise. Max 25 words.`;
+		const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
 		const response = await fetch(url, {
-			headers: { Accept: "text/plain" },
-			signal: controller.signal,
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				contents: [{ parts: [{ text: prompt }] }],
+				generationConfig: { temperature: 0.7, maxOutputTokens: 100 },
+			}),
 		});
-		clearTimeout(timeoutId);
 
 		if (response.ok) {
-			let text = await response.text();
-			text = text.replace(/^["']|["']$/g, "").trim(); // Remove quotes
-
-			// Validation: Ensure it's not an error message
-			if (text.length > 5 && !text.includes("Error")) {
-				return `✨ ${text}`;
-			}
+			const data = await response.json();
+			const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+			if (text && text.length > 10) return `✨ ${text.replace(/^["']|["']$/g, "")}`;
 		}
 	} catch (_error) {
-		// Silent fail to fallback
+		console.warn("Gemini Insight failed:", _error.message);
 	}
 
-	// 2. FALLBACK: The Oracle's Static Wisdom (If AI fails)
-	// We keep the static lists ONLY for offline/error states
-
-	// Check categories
+	// FALLBACK
 	for (const [_category, data] of Object.entries(INSIGHT_CATEGORIES)) {
 		if (data.keywords.some((w) => cleanUsername.includes(w))) {
-			// Add random flavor to static text to feign uniqueness
-			const flavors = ["✨", "💎", "🔥", "⚡", "🌟"];
-			const flavor = flavors[Math.floor(Math.random() * flavors.length)];
-			const base =
-				data.insights[Math.floor(Math.random() * data.insights.length)];
-			return `${flavor} ${base}`;
+			return `✨ ${_selectDeterministic(data.insights, cleanUsername)}`;
 		}
 	}
+	return `💎 ${GOLDEN_DICTIONARY?.[cleanUsername] || "A digital artifact of potential."}`;
+}
 
-	// General Fallback
-	const fallbackFlavors = [
-		"💎 A digital artifact of unknown power.",
-		"✨ Woven from the fabric of the digital ether.",
-		"🌟 A unique identifier in the vast network.",
-		"🔥 Forged in the fires of the blockchain.",
-		"⚡ Pulsing with potential and digital value.",
-	];
-	return fallbackFlavors[Math.floor(Math.random() * fallbackFlavors.length)];
+// ==================== STREAMING & INSIGHTS ====================
+
+/**
+ * STREAMING INSIGHT: Progressively generate and callback text (v9.5 Supreme Style)
+ * Uses NdJSON streaming from Gemini 1.5 Flash
+ */
+export async function streamShortInsight(username, onChunk) {
+	const cleanUsername = username.replace("@", "").toLowerCase();
+	const apiKey = CONFIG.GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+
+	if (!apiKey || apiKey === "YOUR_GEMINI_API_KEY_HERE") {
+		return onChunk("✨ Analyzing local patterns...");
+	}
+
+	try {
+		const prompt = `Analyze @${cleanUsername} with BRAND STRATEGY depth. EXPLAIN value core. English. Precise.`;
+		const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:streamGenerateContent?alt=sse&key=${apiKey}`;
+
+		const response = await fetch(url, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				contents: [{ parts: [{ text: prompt }] }],
+				generationConfig: { temperature: 0.8, maxOutputTokens: 200 },
+			}),
+		});
+
+		if (!response.ok) throw new Error("Stream Failed");
+
+		const reader = response.body.getReader();
+		const decoder = new TextDecoder();
+		let fullText = "✨ ";
+
+		while (true) {
+			const { done, value } = await reader.read();
+			if (done) break;
+
+			const chunk = decoder.decode(value, { stream: true });
+			const lines = chunk.split("\n");
+
+			for (const line of lines) {
+				if (line.startsWith("data: ")) {
+					try {
+						const json = JSON.parse(line.substring(6));
+						const part = json.candidates?.[0]?.content?.parts?.[0]?.text;
+						if (part) {
+							fullText += part;
+							await onChunk(fullText);
+						}
+					} catch (e) {}
+				}
+			}
+		}
+		return fullText;
+	} catch (e) {
+		console.error("Stream Error:", e.message);
+		return onChunk("✨ " + (GOLDEN_DICTIONARY?.[cleanUsername] || "Digital heritage artifact."));
+	}
 }
 
 function _getDefaultTagline(username, category = "general") {
@@ -1543,37 +1594,45 @@ let cachedTonStats = {
 export async function getTonMarketStats() {
 	const NOW = Date.now();
 
-	// اگر کش معتبر است (زیر 60 ثانیه)، همان را برگردان
 	if (cachedTonStats.price > 0 && NOW - cachedTonStats.lastUpdated < 60000) {
 		return { price: cachedTonStats.price, change24h: cachedTonStats.change24h };
 	}
 
-	// 1. CoinGecko (پایدارترین و رایگان‌ترین API عمومی)
+	// 1. TonAPI Rates (True On-Chain DEX Price)
 	try {
+		const apiKey = CONFIG.TONAPI_KEY || process.env.TONAPI_KEY;
+		const headers = { Accept: "application/json" };
+		if (apiKey && !apiKey.startsWith("YOUR_")) {
+			headers.Authorization = `Bearer ${apiKey}`;
+		}
+
 		const response = await fetch(
-			"https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=usd&include_24hr_change=true",
-			{ timeout: 5000 },
+			"https://tonapi.io/v2/rates?tokens=ton&currencies=usd",
+			{ headers, timeout: 5000 },
 		);
+
 		if (response.ok) {
 			const data = await response.json();
-			if (data["the-open-network"]) {
-				const price = data["the-open-network"].usd;
-				const change = data["the-open-network"].usd_24h_change;
+			const price = data.rates?.TON?.prices?.USD;
+			const change = data.rates?.TON?.diff_24h?.USD;
 
-				if (price > 0) {
-					cachedTonStats = { price, change24h: change, lastUpdated: NOW };
-					return { price, change24h: change };
-				}
+			if (price > 0) {
+				cachedTonStats = {
+					price,
+					change24h: parseFloat(change || 0).toFixed(2),
+					lastUpdated: NOW,
+				};
+				return { price, change24h: cachedTonStats.change24h };
 			}
 		}
 	} catch (_e) {
-		// خطای سایلنت برای فال‌بک
+		console.warn("TonAPI Rates failed, falling back to CEX APIs...");
 	}
 
-	// 2. Binance (Public API - بسیار سریع)
+	// 2. Binance (Public API - Backup)
 	try {
 		const response = await fetch(
-			"https://api.binance.com/api/v3/ticker/24hr?symbol=TONUSDT",
+			"https://api.binance.com/api/v3/ticker/24hr?symbol=TONCOINUSDT",
 			{ timeout: 5000 },
 		);
 		if (response.ok) {
@@ -1581,41 +1640,17 @@ export async function getTonMarketStats() {
 			const price = parseFloat(data.lastPrice);
 			const change = parseFloat(data.priceChangePercent);
 
-			if (price > 0) {
+			if (price > 2.0) { // Safety check: The Open Network is > $2. Tokamak is < $1.5
 				cachedTonStats = { price, change24h: change, lastUpdated: NOW };
 				return { price, change24h: change };
 			}
 		}
-	} catch (_e) {}
+	} catch (_e) { }
 
-	// 3. OKX (Backup)
-	try {
-		const response = await fetch(
-			"https://www.okx.com/api/v5/market/ticker?instId=TON-USDT",
-			{ timeout: 5000 },
-		);
-		if (response.ok) {
-			const data = await response.json();
-			if (data.data?.[0]) {
-				const ticker = data.data[0];
-				const price = parseFloat(ticker.last);
-				const open = parseFloat(ticker.open24h);
-				const change = ((price - open) / open) * 100;
-
-				if (price > 0) {
-					cachedTonStats = { price, change24h: change, lastUpdated: NOW };
-					return { price, change24h: change };
-				}
-			}
-		}
-	} catch (_e) {}
-
-	// اگر دیتای قدیمی در کش داریم، حتی اگر منقضی شده باشد آن را برگردان (بهتر از قیمت ثابت است)
 	if (cachedTonStats.price > 0) {
 		return { price: cachedTonStats.price, change24h: cachedTonStats.change24h };
 	}
 
-	console.log("⚠️ All TON price APIs failed, using hardcoded fallback");
 	return { price: 5.5, change24h: 0 };
 }
 

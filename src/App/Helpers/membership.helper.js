@@ -1,16 +1,7 @@
-/**
- * Membership Helper Module
- * Channel membership checks and join message utilities.
- * Extracted from bot.entry.js to reduce monolith size.
- */
-
 import { CONFIG } from "../../core/Config/app.config.js";
 
 /**
- * Check if user is member of required channel.
- * @param {object} bot - Telegraf bot instance
- * @param {number} userId - Telegram user ID
- * @returns {Promise<boolean>}
+ * Check if user is a member of the required channel
  */
 export async function isChannelMember(bot, userId) {
 	try {
@@ -18,31 +9,38 @@ export async function isChannelMember(bot, userId) {
 			CONFIG.REQUIRED_CHANNEL,
 			userId,
 		);
+		// Allowed: Creator, Admin, Member.
+		// Blocked: Left, Kicked, Restricted.
 		return ["member", "administrator", "creator"].includes(member.status);
 	} catch (error) {
-		console.error("Channel check error:", error.message);
+		console.error("❌ Channel verification failed:", error.message);
+		// Fail open only if critical error, otherwise fail closed
 		return false;
 	}
 }
 
 /**
- * Send join channel message.
- * @param {object} ctx - Telegraf context
+ * Message template for membership requirement
  */
 export function sendJoinChannelMessage(ctx) {
 	return ctx.replyWithMarkdown(
 		`
-🔒 *Please Join First!*
+🔒 *Access Limited!*
 
-To use this bot, you must join our channel.
+To use iFragmentBot analysis tools, you must join our official community channel first.
 
-👇 Click the button below to join:
+**Please join and then click the verification button.**
 `,
 		{
 			reply_markup: {
 				inline_keyboard: [
-					[{ text: "📢 Join Channel", url: CONFIG.CHANNEL_LINK }],
-					[{ text: "✅ I Joined", callback_data: "check_membership" }],
+					[{ text: "📢 Join @FragmentsCommunity", url: CONFIG.CHANNEL_LINK }],
+					[
+						{
+							text: "✅ I Joined — Continue",
+							callback_data: "check_membership",
+						},
+					],
 				],
 			},
 		},
@@ -50,41 +48,19 @@ To use this bot, you must join our channel.
 }
 
 /**
- * Check membership and stop if not a member.
- * Used as a guard for protected features.
- *
- * @param {object} ctx - Telegraf context
- * @param {object} bot - Telegraf bot instance
- * @param {function} isAdmin - Admin check function
- * @returns {Promise<boolean>} true if user can proceed, false otherwise
+ * Higher level helper for handlers to check membership
  */
 export async function checkMembershipOrStop(ctx, bot, isAdmin) {
-	try {
-		// Admins bypass membership check
-		if (isAdmin(ctx.from.id)) return true;
+	const userId = ctx.from.id;
 
-		const isMember = await isChannelMember(bot, ctx.from.id);
-		if (!isMember) {
-			try {
-				await ctx.answerCbQuery(
-					`❌ Join ${CONFIG.REQUIRED_CHANNEL} to use this feature!`,
-					{ show_alert: true },
-				);
-			} catch (_e) {
-				// Callback may have expired, ignore
-			}
-			await sendJoinChannelMessage(ctx);
-			return false;
-		}
-		return true;
-	} catch (error) {
-		console.error("Membership check error:", error.message);
-		try {
-			await ctx.answerCbQuery("⚠️ Please try again", { show_alert: false });
-		} catch (_e) {
-			// Ignore
-		}
+	// Admins are exempt
+	if (isAdmin && isAdmin(userId)) return true;
+
+	const isMember = await isChannelMember(bot, userId);
+	if (!isMember) {
 		await sendJoinChannelMessage(ctx);
 		return false;
 	}
+
+	return true;
 }

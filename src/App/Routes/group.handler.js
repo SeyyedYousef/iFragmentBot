@@ -177,7 +177,7 @@ export async function handleGroupCommand(
 				});
 			}
 			// Check Limits
-			const limitCheck = useFeature(userId, "credits");
+			const limitCheck = await useFeature(userId, "credits");
 			if (!limitCheck.success) {
 				return ctx.reply(formatNoCreditsMessage("credits", userId), {
 					parse_mode: "Markdown",
@@ -249,7 +249,7 @@ export async function handleGroupCommand(
 				);
 			}
 
-			const limitCheck = useFeature(userId, "credits");
+			const limitCheck = await useFeature(userId, "credits");
 			if (!limitCheck.success) {
 				return ctx.reply(formatNoCreditsMessage("credits", userId), {
 					parse_mode: "Markdown",
@@ -310,7 +310,7 @@ export async function handleGroupCommand(
 				});
 
 			// Check Limits
-			const limitCheck = useFeature(userId, "credits");
+			const limitCheck = await useFeature(userId, "credits");
 			if (!limitCheck.success) {
 				return ctx.reply(formatNoCreditsMessage("credits", userId), {
 					parse_mode: "Markdown",
@@ -380,7 +380,7 @@ export async function handleGroupCommand(
 				});
 
 			// Check Limits
-			const limitCheck = useFeature(userId, "credits");
+			const limitCheck = await useFeature(userId, "credits");
 			if (!limitCheck.success) {
 				return ctx.reply(formatNoCreditsMessage("credits", userId), {
 					parse_mode: "Markdown",
@@ -484,7 +484,7 @@ export async function handleGroupCommand(
 			}
 
 			// Check Limits
-			const limitCheck = useFeature(userId, "credits");
+			const limitCheck = await useFeature(userId, "credits");
 			if (!limitCheck.success) {
 				return ctx.reply(formatNoCreditsMessage("credits", userId), {
 					parse_mode: "Markdown",
@@ -677,8 +677,8 @@ export async function handlePortfolioByWallet(ctx, walletAddress) {
 	try {
 		await generateWalletReport(ctx, walletAddress);
 
-		const creditResult = useFeature(ctx.from.id, "portfolio");
-		const creditsMsg = formatCreditsMessage(creditResult.remaining);
+		const creditResult = await useFeature(ctx.from.id, "portfolio");
+		const creditsMsg = formatCreditsMessage(creditResult.credits);
 		await ctx.replyWithMarkdown(creditsMsg);
 	} catch (error) {
 		console.error("Portfolio error:", error);
@@ -721,8 +721,8 @@ export async function handlePortfolioByUsername(ctx, username) {
 
 		await generateWalletReport(ctx, ownerWallet);
 
-		const creditResult = useFeature(ctx.from.id, "portfolio");
-		const creditsMsg = formatCreditsMessage(creditResult.remaining);
+		const creditResult = await useFeature(ctx.from.id, "portfolio");
+		const creditsMsg = formatCreditsMessage(creditResult.credits);
 		await ctx.replyWithMarkdown(creditsMsg);
 	} catch (error) {
 		console.error("Portfolio by username error:", error);

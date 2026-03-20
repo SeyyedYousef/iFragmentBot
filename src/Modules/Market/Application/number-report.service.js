@@ -10,14 +10,14 @@ import { tonPriceCache } from "../../../Shared/Infra/Cache/cache.service.js";
 import * as scraplingService from "../../../Shared/Infra/Scraping/scrapling.service.js";
 import * as telegramClient from "../../../Shared/Infra/Telegram/telegram.client.js";
 import { getBrowser } from "../../../Shared/UI/Components/card-generator.component.js";
-import * as seetgService from "../../Automation/Application/seetg.service.js";
 import * as marketService from "./market.service.js";
 import * as portfolioService from "./portfolio.service.js";
 
 // Global cached numbers CSV data
 let numbersDatabase = null;
 
-const ANON_NUMBER_COLLECTION = "EQAOQdwdw8kGftJCSFgOErM1mBjYPe4DBPq8-AhF6vr9si5N";
+const ANON_NUMBER_COLLECTION =
+	"EQAOQdwdw8kGftJCSFgOErM1mBjYPe4DBPq8-AhF6vr9si5N";
 
 export function loadNumbersDatabase() {
 	if (numbersDatabase) return;
@@ -185,41 +185,106 @@ function analyzeNumberPattern(numberClean, globalFloor = 850) {
 	if (tail.length === 8) {
 		const numVal = parseInt(tail, 10);
 		if (uniqueCount === 1) {
-			tier = "Grail"; label = "Solid 8 (XXXXXXXX)"; bonus = 450; score = 99; patternFloor = 150000;
+			tier = "Grail";
+			label = "Solid 8 (XXXXXXXX)";
+			bonus = 450;
+			score = 99;
+			patternFloor = 150000;
 		} else if (/^.(.)\1{6}$/.test(tail)) {
-			tier = "Elite"; label = "7-Ending Stream"; bonus = 250; score = 92; patternFloor = 45000;
+			tier = "Elite";
+			label = "7-Ending Stream";
+			bonus = 250;
+			score = 92;
+			patternFloor = 45000;
 		} else if (/^(.)\1{3}(.)\2{3}$/.test(tail)) {
-			tier = "Elite"; label = "Quad-Blocks (XXXX YYYY)"; bonus = 180; patternFloor = 25000;
-		} else if (/^(01234567|12345678|23456789|98765432|87654321|76543210)$/.test(tail)) {
-			tier = "Elite"; label = "Perfect Ladder"; bonus = 220; patternFloor = 35000;
+			tier = "Elite";
+			label = "Quad-Blocks (XXXX YYYY)";
+			bonus = 180;
+			patternFloor = 25000;
+		} else if (
+			/^(01234567|12345678|23456789|98765432|87654321|76543210)$/.test(tail)
+		) {
+			tier = "Elite";
+			label = "Perfect Ladder";
+			bonus = 220;
+			patternFloor = 35000;
 		} else if (tail === tail.split("").reverse().join("")) {
-			tier = "Premium"; label = "Golden Radar (8-Digit)"; bonus = 140; patternFloor = 15000;
+			tier = "Premium";
+			label = "Golden Radar (8-Digit)";
+			bonus = 140;
+			patternFloor = 15000;
 		} else if (numVal < 1000) {
-			tier = "Elite"; label = "1K Club (+888 0000 0)"; bonus = 200; patternFloor = 50000;
+			tier = "Elite";
+			label = "1K Club (+888 0000 0)";
+			bonus = 200;
+			patternFloor = 50000;
 		} else if (numVal < 10000) {
-			tier = "Premium"; label = "10K Club (+888 0000)"; bonus = 120; patternFloor = 20000;
+			tier = "Premium";
+			label = "10K Club (+888 0000)";
+			bonus = 120;
+			patternFloor = 20000;
 		} else if (consecutiveCount >= 5) {
-			tier = "Premium"; label = `Consecutive ${consecutiveCount} Digits`; bonus = consecutiveCount * 25;
-			patternFloor = consecutiveCount === 5 ? 12000 : consecutiveCount === 6 ? 45000 : 100000;
+			tier = "Premium";
+			label = `Consecutive ${consecutiveCount} Digits`;
+			bonus = consecutiveCount * 25;
+			patternFloor =
+				consecutiveCount === 5
+					? 12000
+					: consecutiveCount === 6
+						? 45000
+						: 100000;
 		} else if (luckyCount >= 5) {
-			tier = "Premium"; label = `Super Lucky (${luckyCount}x 7/8)`; bonus = luckyCount * 15; patternFloor = Math.max(patternFloor, luckyCount * 2000);
+			tier = "Premium";
+			label = `Super Lucky (${luckyCount}x 7/8)`;
+			bonus = luckyCount * 15;
+			patternFloor = Math.max(patternFloor, luckyCount * 2000);
 		} else if (uniqueCount <= 2) {
-			tier = "Premium"; label = "Double-Digit Only"; bonus = 80; patternFloor = 8000;
+			tier = "Premium";
+			label = "Double-Digit Only";
+			bonus = 80;
+			patternFloor = 8000;
 		} else if (tail.endsWith("0000")) {
-			tier = "Premium"; label = "Quad-Zero Ending"; bonus = 100; patternFloor = 12000;
+			tier = "Premium";
+			label = "Quad-Zero Ending";
+			bonus = 100;
+			patternFloor = 12000;
 		}
 	}
 
-	score = tier === "Grail" ? 98 : tier === "Elite" ? 90 : tier === "Premium" ? 75 : 40;
-	
+	score =
+		tier === "Grail"
+			? 98
+			: tier === "Elite"
+				? 90
+				: tier === "Premium"
+					? 75
+					: 40;
+
 	// Add slight variance based on digits
 	if (uniqueCount <= 2) score += 5;
 	if (luckyCount >= 4) score += 3;
 	score = clamp(score, 10, 99);
 
-	const rarityRank = score >= 95 ? "Top 0.1%" : score >= 90 ? "Top 1%" : score >= 80 ? "Top 5%" : score >= 60 ? "Top 15%" : "Top 40%";
+	const rarityRank =
+		score >= 95
+			? "Top 0.1%"
+			: score >= 90
+				? "Top 1%"
+				: score >= 80
+					? "Top 5%"
+					: score >= 60
+						? "Top 15%"
+						: "Top 40%";
 
-	return { type: tier, bonus, label, score, uniqueCount, patternFloor, rarityRank };
+	return {
+		type: tier,
+		bonus,
+		label,
+		score,
+		uniqueCount,
+		patternFloor,
+		rarityRank,
+	};
 }
 
 /**
@@ -235,26 +300,56 @@ async function scrapeFragmentNumber(numberClean) {
 			timeoutMs: 30000,
 		});
 
-		if (!payload || !payload.html) return { status: "unknown", priceTon: null, url: baseUrl };
+		if (!payload || !payload.html)
+			return { status: "unknown", priceTon: null, url: baseUrl };
 
 		const html = payload.html;
-		if (html.includes("tm-empty-placeholder") && (html.includes("Address unavailable") || html.includes("Number not found"))) {
+		if (
+			html.includes("tm-empty-placeholder") &&
+			(html.includes("Address unavailable") ||
+				html.includes("Number not found"))
+		) {
 			return { status: "not_found", priceTon: null, url: baseUrl };
 		}
 
 		let status = "available";
-		if (html.includes('"status":"sold"') || html.includes(">Sold<") || html.includes("tm-status-sold") || html.includes("tm-status-resale")) status = "sold";
-		else if (html.includes(">Unavailable<") || html.includes("tm-status-unavail")) status = "available";
-		else if (html.includes(">On auction<") || html.includes("tm-status-on-auction")) status = "on_auction";
-		else if (html.includes(">For sale<") || html.includes("tm-status-for-sale")) status = "for_sale";
-		else if (html.includes(">Sold<") || html.includes("status-sold")) status = "sold";
+		if (
+			html.includes('"status":"sold"') ||
+			html.includes(">Sold<") ||
+			html.includes("tm-status-sold") ||
+			html.includes("tm-status-resale")
+		)
+			status = "sold";
+		else if (
+			html.includes(">Unavailable<") ||
+			html.includes("tm-status-unavail")
+		)
+			status = "available";
+		else if (
+			html.includes(">On auction<") ||
+			html.includes("tm-status-on-auction")
+		)
+			status = "on_auction";
+		else if (html.includes(">For sale<") || html.includes("tm-status-for-sale"))
+			status = "for_sale";
+		else if (html.includes(">Sold<") || html.includes("status-sold"))
+			status = "sold";
 
-		const priceMatches = [...html.matchAll(/icon-ton">([\d,]+(?:\.\d+)?)<\/div>/g)];
-		const prices = priceMatches.map(m => safeNum(m[1], null)).filter(p => p > 0);
+		const priceMatches = [
+			...html.matchAll(/icon-ton">([\d,]+(?:\.\d+)?)<\/div>/g),
+		];
+		const prices = priceMatches
+			.map((m) => safeNum(m[1], null))
+			.filter((p) => p > 0);
 		const priceTon = prices.length > 0 ? prices[0] : null;
 
-		const ownerMatch = html.match(/tm-wallet-address">([\s\S]*?)<\/span>/) || html.match(/address\/(\w+)/) || html.match(/tm-address">(\w+)/);
-		let owner = ownerMatch ? ownerMatch[1].replace(/<[^>]*>/g, "").trim() : null;
+		const ownerMatch =
+			html.match(/tm-wallet-address">([\s\S]*?)<\/span>/) ||
+			html.match(/address\/(\w+)/) ||
+			html.match(/tm-address">(\w+)/);
+		let owner = ownerMatch
+			? ownerMatch[1].replace(/<[^>]*>/g, "").trim()
+			: null;
 		if (owner && !/^[A-Za-z0-9_-]+$/.test(owner)) {
 			owner = owner.replace(/\s+/g, "");
 			const simpleMatch = owner.match(/[A-Za-z0-9_-]{10,}/);
@@ -262,24 +357,43 @@ async function scrapeFragmentNumber(numberClean) {
 		}
 
 		const scrapedHistory = [];
-		const gridRowMatches = html.matchAll(/tm-table-grid-row">([\s\S]*?)<\/div>\s*<\/div>/g);
+		const gridRowMatches = html.matchAll(
+			/tm-table-grid-row">([\s\S]*?)<\/div>\s*<\/div>/g,
+		);
 		for (const row of gridRowMatches) {
 			const rowHtml = row[1];
 			const pMatch = rowHtml.match(/icon-ton">([\d,]+(?:\.\d+)?)<\/div>/);
 			const dMatch = rowHtml.match(/tm-datetime[^>]*>([\s\S]*?)<\/div>/);
 			const aMatch = rowHtml.match(/tm-char-type">([\s\S]*?)<\/div>/);
 			const action = aMatch ? aMatch[1].trim().toLowerCase() : "";
-			if (pMatch && (action.includes("sale") || action.includes("auction") || action.includes("transfer") || action.includes("sold"))) {
-				scrapedHistory.push({ price: safeNum(pMatch[1], null), date: dMatch ? dMatch[1].trim() : "Recent", source: "Fragment" });
+			if (
+				pMatch &&
+				(action.includes("sale") ||
+					action.includes("auction") ||
+					action.includes("transfer") ||
+					action.includes("sold"))
+			) {
+				scrapedHistory.push({
+					price: safeNum(pMatch[1], null),
+					date: dMatch ? dMatch[1].trim() : "Recent",
+					source: "Fragment",
+				});
 			}
 		}
 
-		let lastSale = scrapedHistory.length > 0 ? scrapedHistory[0].price : null;
-		let lastSaleDate = scrapedHistory.length > 0 ? scrapedHistory[0].date : null;
+		const lastSale = scrapedHistory.length > 0 ? scrapedHistory[0].price : null;
+		const lastSaleDate =
+			scrapedHistory.length > 0 ? scrapedHistory[0].date : null;
 
 		return {
-			status, priceTon, owner, lastSale, lastSaleDate, history: scrapedHistory, url: baseUrl,
-			highestBid: status === "on_auction" ? prices[0] : null
+			status,
+			priceTon,
+			owner,
+			lastSale,
+			lastSaleDate,
+			history: scrapedHistory,
+			url: baseUrl,
+			highestBid: status === "on_auction" ? prices[0] : null,
 		};
 	} catch (e) {
 		console.warn("⚠️ Fragment number scrape failed:", e.message);
@@ -295,12 +409,17 @@ async function findNFTAddressByNumber(numberClean) {
 	const searchUrl = `https://getgems.io/collection/${ANON_NUMBER_COLLECTION}?q=${encodeURIComponent(formatted)}`;
 	try {
 		const payload = await scraplingService.scraplingFetchFragment(numberClean, {
-			type: "number", url: searchUrl, wait: ".nft-card", timeoutMs: 30000
+			type: "number",
+			url: searchUrl,
+			wait: ".nft-card",
+			timeoutMs: 30000,
 		});
 		if (!payload || !payload.html) return null;
 		const nftMatch = payload.html.match(/\/nft\/(EQ[A-Za-z0-9_-]{46})/);
 		return nftMatch ? nftMatch[1] : null;
-	} catch (e) { return null; }
+	} catch (_e) {
+		return null;
+	}
 }
 
 /**
@@ -310,7 +429,10 @@ async function fetchGetGemsCollectionPulse() {
 	const url = `https://getgems.io/collection/${ANON_NUMBER_COLLECTION}`;
 	try {
 		const payload = await scraplingService.scraplingFetchFragment("pulse", {
-			type: "custom", url: url, wait: ".collection-pulse, .stats-list", timeoutMs: 30000
+			type: "custom",
+			url: url,
+			wait: ".collection-pulse, .stats-list",
+			timeoutMs: 30000,
 		});
 		if (!payload || !payload.html) return null;
 
@@ -322,9 +444,11 @@ async function fetchGetGemsCollectionPulse() {
 			owners: ownersMatch ? ownersMatch[1] : null,
 			items: itemsMatch ? itemsMatch[1] : null,
 			volume7d: volume7dMatch ? safeNum(volume7dMatch[1], null) : null,
-			url
+			url,
 		};
-	} catch (e) { return null; }
+	} catch (_e) {
+		return null;
+	}
 }
 
 /**
@@ -335,27 +459,39 @@ async function fetchGetGemsMarketData(nftAddress) {
 	const url = `https://getgems.io/collection/${ANON_NUMBER_COLLECTION}/${nftAddress}`;
 	try {
 		const payload = await scraplingService.scraplingFetchFragment(nftAddress, {
-			type: "custom", url: url, wait: ".nft-page, .tm-section", timeoutMs: 30000
+			type: "custom",
+			url: url,
+			wait: ".nft-page, .tm-section",
+			timeoutMs: 30000,
 		});
 		if (!payload || !payload.html) return null;
 		const html = payload.html;
-		
-		const isRestricted = html.includes("Scam") || html.includes("Warning") || html.includes("tm-status-restricted");
-		const priceMatch = html.match(/Price[\s\S]*?([\d,.]+)\s*TON/i) || html.match(/icon-ton">([\d,]+(?:\.\d+)?)<\/div>/);
+
+		const isRestricted =
+			html.includes("Scam") ||
+			html.includes("Warning") ||
+			html.includes("tm-status-restricted");
+		const priceMatch =
+			html.match(/Price[\s\S]*?([\d,.]+)\s*TON/i) ||
+			html.match(/icon-ton">([\d,]+(?:\.\d+)?)<\/div>/);
 		const lastSaleMatch = html.match(/Last sale[\s\S]*?([\d,.]+)\s*TON/i);
-		
+
 		// Extract owner from GetGems if possible
-		const ownerMatch = html.match(/Owner[\s\S]*?address\/([A-Za-z0-9_-]{40,})/i) || html.match(/tm-wallet-address">([A-Za-z0-9_-]{40,})/);
+		const ownerMatch =
+			html.match(/Owner[\s\S]*?address\/([A-Za-z0-9_-]{40,})/i) ||
+			html.match(/tm-wallet-address">([A-Za-z0-9_-]{40,})/);
 		const owner = ownerMatch ? ownerMatch[1] : null;
 
-		return { 
-			priceTon: priceMatch ? safeNum(priceMatch[1], null) : null, 
-			lastSale: lastSaleMatch ? safeNum(lastSaleMatch[1], null) : null, 
-			isRestricted, 
+		return {
+			priceTon: priceMatch ? safeNum(priceMatch[1], null) : null,
+			lastSale: lastSaleMatch ? safeNum(lastSaleMatch[1], null) : null,
+			isRestricted,
 			owner,
-			url 
+			url,
 		};
-	} catch (e) { return null; }
+	} catch (_e) {
+		return null;
+	}
 }
 
 async function scrapeMarketSampleNumbers({ limit = 60 } = {}) {
@@ -364,8 +500,15 @@ async function scrapeMarketSampleNumbers({ limit = 60 } = {}) {
 	try {
 		page = await browser.newPage();
 		await page.setRequestInterception(true);
-		page.on("request", (req) => { if (["image", "stylesheet", "font", "media"].includes(req.resourceType())) req.abort(); else req.continue(); });
-		await page.goto("https://fragment.com/numbers?sort=price_asc&filter=sale", { waitUntil: "domcontentloaded", timeout: 30000 });
+		page.on("request", (req) => {
+			if (["image", "stylesheet", "font", "media"].includes(req.resourceType()))
+				req.abort();
+			else req.continue();
+		});
+		await page.goto("https://fragment.com/numbers?sort=price_asc&filter=sale", {
+			waitUntil: "domcontentloaded",
+			timeout: 30000,
+		});
 		const items = await page.evaluate(() => {
 			const out = [];
 			const parseTon = (s) => {
@@ -378,43 +521,67 @@ async function scrapeMarketSampleNumbers({ limit = 60 } = {}) {
 				const txt = r.innerText || "";
 				const nMatch = txt.match(/\b888\d{4,10}\b/);
 				const p = parseTon(txt);
-				if (nMatch && p && p > 0) out.push({ numberClean: nMatch[0], price: p });
+				if (nMatch && p && p > 0)
+					out.push({ numberClean: nMatch[0], price: p });
 			}
 			return out;
 		});
 		return items.slice(0, limit);
-	} catch (e) { return []; } finally { if (page) await page.close(); }
+	} catch (_e) {
+		return [];
+	} finally {
+		if (page) await page.close();
+	}
 }
 
 function median(values) {
-	const v = values.filter(x => Number.isFinite(x)).sort((a, b) => a - b);
+	const v = values.filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
 	if (!v.length) return null;
 	const mid = Math.floor(v.length / 2);
 	return v.length % 2 ? v[mid] : (v[mid - 1] + v[mid]) / 2;
 }
 
-function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
+function clamp(n, min, max) {
+	return Math.max(min, Math.min(max, n));
+}
 
-function estimateWithModel({ floor, marketSample, scraped, pattern, numberClean }) {
-	const marketPrices = marketSample.map(x => x.price).filter(p => p > 0);
+function estimateWithModel({
+	floor,
+	marketSample,
+	scraped,
+	pattern,
+	numberClean,
+}) {
+	const marketPrices = marketSample.map((x) => x.price).filter((p) => p > 0);
 	const marketMedian = median(marketPrices);
 	const patternFloor = pattern.patternFloor || floor;
-	const scored = marketSample.map(it => {
-		const dist = Math.abs(it.numberClean.length - numberClean.length) * 2;
-		return { ...it, dist };
-	}).sort((a, b) => a.dist - b.dist);
+	const scored = marketSample
+		.map((it) => {
+			const dist = Math.abs(it.numberClean.length - numberClean.length) * 2;
+			return { ...it, dist };
+		})
+		.sort((a, b) => a.dist - b.dist);
 	const k = scored.slice(0, 12);
-	const compMedian = median(k.map(x => x.price));
+	const compMedian = median(k.map((x) => x.price));
 	const patternMultiplier = 1 + (pattern.bonus || 0) / 100;
-	let est = Math.max(patternFloor, compMedian || marketMedian || floor) * patternMultiplier;
+	let est =
+		Math.max(patternFloor, compMedian || marketMedian || floor) *
+		patternMultiplier;
 	est = Math.max(est, patternFloor * 1.05);
 
 	let confidence = 35;
 	if (marketMedian) confidence += 10;
 	if (compMedian) confidence += 15;
-	if (scraped.status === "for_sale" || scraped.status === "sold") confidence += 20;
+	if (scraped.status === "for_sale" || scraped.status === "sold")
+		confidence += 20;
 
-	return { est: Math.round(est), marketMedian, compMedian, confidence: clamp(confidence, 25, 95), rangePct: 0.25 };
+	return {
+		est: Math.round(est),
+		marketMedian,
+		compMedian,
+		confidence: clamp(confidence, 25, 95),
+		rangePct: 0.25,
+	};
 }
 
 export async function generateNumberReport(input, tonPrice = 5.5) {
@@ -428,7 +595,8 @@ export async function generateNumberReport(input, tonPrice = 5.5) {
 	let floor = tonPriceCache.get("floor888")?.price;
 	if (!floor) {
 		floor = await marketService.get888Stats();
-		if (floor) tonPriceCache.set("floor888", { price: floor, timestamp: Date.now() });
+		if (floor)
+			tonPriceCache.set("floor888", { price: floor, timestamp: Date.now() });
 	}
 	if (!floor) floor = 850;
 
@@ -442,56 +610,73 @@ export async function generateNumberReport(input, tonPrice = 5.5) {
 
 	const pattern = analyzeNumberPattern(numberClean, floor);
 	const marketSample = await scrapeMarketSampleNumbers();
-	const model = estimateWithModel({ floor, marketSample, scraped, pattern, numberClean });
+	const model = estimateWithModel({
+		floor,
+		marketSample,
+		scraped,
+		pattern,
+		numberClean,
+	});
 
 	const estimated = model.est;
 	const lowEst = Math.round(estimated * 0.75);
 	const highEst = Math.round(estimated * 1.25);
-	const vsFloor = ((estimated / floor) - 1) * 100;
+	const vsFloor = (estimated / floor - 1) * 100;
 
 	let registeredText = "⏳ Unknown";
 	try {
 		const check = await telegramClient.checkPhoneNumber(number);
 		registeredText = check.registered ? "✅ Registered" : "❌ Not Active";
-	} catch (e) {}
+	} catch (_e) { }
 
 	const estUsd = Math.round(estimated * tonPrice);
 	const statusDisplay =
-		scraped.status === "for_sale" ? "💰 FOR SALE" :
-		scraped.status === "on_auction" ? "🔨 ON AUCTION" :
-		scraped.status === "sold" ? "✅ SOLD" :
-		"🔵 NOT LISTED";
+		scraped.status === "for_sale"
+			? "💰 FOR SALE"
+			: scraped.status === "on_auction"
+				? "🔨 ON AUCTION"
+				: scraped.status === "sold"
+					? "✅ SOLD"
+					: "🔵 NOT LISTED";
 
 	let report = "";
 	report += `📱 *${formattedNumber}*\n`;
 	report += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
 	report += `🔵 ${statusDisplay}`;
-	if (scraped.priceTon) report += `  •  Price: *${formatNumber(scraped.priceTon)} TON*`;
+	if (scraped.priceTon)
+		report += `  •  Price: *${formatNumber(scraped.priceTon)} TON*`;
 	report += `\n🔗 [Fragment](${scraped.url})\n\n`;
 
 	report += `――――― 📊 *MARKET SNAPSHOT* ―――――\n`;
 	report += `▸ Status: *${statusDisplay}*\n`;
-	const lastSale = scraped.lastSale || (getgemsData && getgemsData.lastSale);
-	if (lastSale) report += `▸ Last Sale: *${formatNumber(lastSale)} TON*${scraped.lastSaleDate ? ` (${scraped.lastSaleDate})` : ""} 🏆\n`;
-	if (scraped.owner) report += `▸ Owner: \`${scraped.owner.substring(0, 8)}...${scraped.owner.slice(-6)}\`\n`;
+	const lastSale = scraped.lastSale || getgemsData?.lastSale;
+	if (lastSale)
+		report += `▸ Last Sale: *${formatNumber(lastSale)} TON*${scraped.lastSaleDate ? ` (${scraped.lastSaleDate})` : ""} 🏆\n`;
+	if (scraped.owner)
+		report += `▸ Owner: \`${scraped.owner.substring(0, 8)}...${scraped.owner.slice(-6)}\`\n`;
 	report += `\n`;
 
 	if (getgemsData || nftAddress) {
 		report += `―――― 🏦 *MULTI‑MARKET LIQUIDITY* ――――\n`;
 		report += `▸ 💎 GetGems: ${getgemsData?.priceTon ? `*${formatNumber(getgemsData.priceTon)} TON*` : "NOT LISTED"}`;
-		if (getgemsData?.lastSale && !scraped.lastSale) report += ` (Last: ${formatNumber(getgemsData.lastSale)} TON)`;
+		if (getgemsData?.lastSale && !scraped.lastSale)
+			report += ` (Last: ${formatNumber(getgemsData.lastSale)} TON)`;
 		report += `\n`;
-		
+
 		if (getgemsData?.isRestricted) {
 			report += `⚠️ *RESTRICTED:* Potential risk tag (Scam/Warning) detected on GetGems.\n`;
 		}
-		
+
 		if (nftAddress) {
 			report += `▸ 📜 Smart Contract: \`${nftAddress}\`\n`;
 			report += `▸ 🏪 Others: [Portals](https://portals.art/nft/${ANON_NUMBER_COLLECTION}/${nftAddress}) / [MRKT](https://mrkt.com/nft/${ANON_NUMBER_COLLECTION}/${nftAddress})\n`;
 		}
-		
-		if (getgemsData?.owner && scraped.owner && getgemsData.owner !== scraped.owner) {
+
+		if (
+			getgemsData?.owner &&
+			scraped.owner &&
+			getgemsData.owner !== scraped.owner
+		) {
 			report += `▸ 👤 GG Owner: \`${getgemsData.owner.substring(0, 8)}...${getgemsData.owner.slice(-6)}\` (Sync Lag?)\n`;
 		}
 		report += `\n`;
@@ -506,9 +691,12 @@ export async function generateNumberReport(input, tonPrice = 5.5) {
 	report += `――――― 📈 *COLLECTION PULSE* ―――――\n`;
 	report += `▸ 💰 Floor: *${formatNumber(floor)} TON*\n`;
 	if (collectionPulse) {
-		if (collectionPulse.owners) report += `▸ 👥 Owners: *${collectionPulse.owners}*\n`;
-		if (collectionPulse.items) report += `▸ #️⃣ Items: *${collectionPulse.items}*\n`;
-		if (collectionPulse.volume7d) report += `▸ 💹 7d Vol: *${formatNumber(collectionPulse.volume7d)} TON*\n`;
+		if (collectionPulse.owners)
+			report += `▸ 👥 Owners: *${collectionPulse.owners}*\n`;
+		if (collectionPulse.items)
+			report += `▸ #️⃣ Items: *${collectionPulse.items}*\n`;
+		if (collectionPulse.volume7d)
+			report += `▸ 💹 7d Vol: *${formatNumber(collectionPulse.volume7d)} TON*\n`;
 	}
 	report += `\n`;
 
@@ -518,13 +706,13 @@ export async function generateNumberReport(input, tonPrice = 5.5) {
 	if (scraped.owner) {
 		try {
 			const port = await portfolioService.getPortfolio(scraped.owner);
-			if (port && port.anonymousNumbers) {
+			if (port?.anonymousNumbers) {
 				otherNumbersCount = port.anonymousNumbers.length;
 				if (otherNumbersCount >= 10) ownerLabel = "🐋 MEG-WHALE";
 				else if (otherNumbersCount >= 5) ownerLabel = "🐬 WHALE";
 				else if (otherNumbersCount >= 2) ownerLabel = "🐙 COLLECTOR";
 			}
-		} catch (e) {}
+		} catch (_e) { }
 	}
 
 	report += `――――― 👥 *HOLDER INSIGHTS* ―――――\n`;
@@ -532,13 +720,14 @@ export async function generateNumberReport(input, tonPrice = 5.5) {
 	if (scraped.owner) {
 		report += `▸ 👤 Owner: \`${scraped.owner.substring(0, 8)}...${scraped.owner.slice(-6)}\`\n`;
 		report += `▸ 🏷️ Type: *${ownerLabel}*\n`;
-		if (otherNumbersCount > 1) report += `▸ 📦 Collection: *Holds ${otherNumbersCount} numbers*\n`;
+		if (otherNumbersCount > 1)
+			report += `▸ 📦 Collection: *Holds ${otherNumbersCount} numbers*\n`;
 	}
 	report += `\n`;
 
 	if (scraped.history && scraped.history.length > 0) {
 		report += `――――― 📜 *HISTORY* ―――――\n`;
-		scraped.history.slice(0, 3).forEach(h => {
+		scraped.history.slice(0, 3).forEach((h) => {
 			report += `▸ ${h.date} @ ${formatNumber(h.price)} TON\n`;
 		});
 		report += `\n`;
@@ -572,6 +761,6 @@ export async function generateNumberReport(input, tonPrice = 5.5) {
 		rarityScore: pattern.score,
 		rarityRank: pattern.rarityRank,
 		ownerLabel,
-		otherNumbersCount
+		otherNumbersCount,
 	};
 }

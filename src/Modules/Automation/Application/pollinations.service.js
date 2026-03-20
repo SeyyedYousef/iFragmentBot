@@ -12,30 +12,43 @@ import {
  */
 export async function generateAnalysis(username) {
 	const cleanUsername = username.replace("@", "").trim();
+	const apiKey = CONFIG.GEMINI_API_KEY || process.env.GEMINI_API_KEY;
 
-	const userPrompt = `Analyze this Telegram Fragment username: @${cleanUsername}
-  
-Generate a complete analysis following the exact format in your instructions. Be creative and inspiring.`;
+	if (!apiKey || apiKey === "YOUR_GEMINI_API_KEY_HERE") {
+		console.warn("⚠️ No Gemini API Key - Falling back to Pollinations for analysis.");
+		const userPrompt = `Analyze this Telegram Fragment username: @${cleanUsername}. Generate a complete analysis.`;
+		const fallbackUrl = `${CONFIG.POLLINATIONS_TEXT_API}/${encodeURIComponent(userPrompt)}?system=${encodeURIComponent(SYSTEM_PROMPT)}&model=openai`;
+		const resp = await fetch(fallbackUrl);
+		return await resp.text();
+	}
+
+	const prompt = `Analyze this Telegram Fragment username: @${cleanUsername}
+Context: ${SYSTEM_PROMPT}
+
+Your task: Generate a comprehensive, premium analysis.
+Focus on: Linguistic rarity, brand potential, and investment value.
+Tone: Expert, strategist, sophisticated.
+Format: HTML-friendly Markdown.`;
 
 	try {
-		// Pollinations.ai text endpoint
-		const url = `${CONFIG.POLLINATIONS_TEXT_API}/${encodeURIComponent(userPrompt)}?system=${encodeURIComponent(SYSTEM_PROMPT)}&model=openai`;
+		const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
 		const response = await fetch(url, {
-			method: "GET",
-			headers: {
-				Accept: "text/plain",
-			},
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				contents: [{ parts: [{ text: prompt }] }],
+				generationConfig: { temperature: 0.8, maxOutputTokens: 1000 },
+			}),
 		});
 
-		if (!response.ok) {
-			throw new Error(`Text API error: ${response.status}`);
+		if (response.ok) {
+			const data = await response.json();
+			return data.candidates?.[0]?.content?.parts?.[0]?.text || "Analysis generated.";
 		}
-
-		const text = await response.text();
-		return text;
+		throw new Error(`Gemini Error: ${response.status}`);
 	} catch (error) {
-		console.error("Error generating analysis:", error);
+		console.error("Gemini Analysis failed:", error.message);
 		throw error;
 	}
 }

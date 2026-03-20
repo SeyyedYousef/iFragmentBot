@@ -1,11 +1,11 @@
 {
   "tonStats": {
-    "price": 1.33,
-    "change24h": 2.702576518233765,
-    "timestamp": 1773286747676
+    "price": 1.254924507549245,
+    "change24h": "2.46",
+    "timestamp": 1774028011464
   },
   "floor888": {
-    "price": 1808,
-    "timestamp": 1773286756824
+    "price": 1899,
+    "timestamp": 1774028031331
   }
 }

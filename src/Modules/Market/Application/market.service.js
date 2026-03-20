@@ -183,8 +183,9 @@ export async function get888Stats() {
 		);
 
 		if (scraped?.success && scraped.html) {
-			const priceMatch = scraped.html.match(/icon-ton">([\d,]+(?:\.\d+)?)<\/div>/) || 
-							  scraped.html.match(/([\d,.]+)\s*TON/);
+			const priceMatch =
+				scraped.html.match(/icon-ton">([\d,]+(?:\.\d+)?)<\/div>/) ||
+				scraped.html.match(/([\d,.]+)\s*TON/);
 			if (priceMatch) {
 				const price = parseFloat(priceMatch[1].replace(/,/g, ""));
 				if (price > 0) {

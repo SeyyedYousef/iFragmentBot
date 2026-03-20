@@ -1,10 +1,4 @@
-/**
- * Unit Tests for Security Service
- * Run with: node --test src/tests/securityService.test.js
- */
-
-import assert from "node:assert";
-import { beforeEach, describe, it } from "node:test";
+import { beforeEach, describe, expect, it } from "vitest";
 
 // Import functions to test
 import {
@@ -18,7 +12,7 @@ import {
 	sanitizeError,
 	withRetry,
 	withTimeout,
-} from "../services/securityService.js";
+} from "./security.service.js";
 
 describe("Encryption/Decryption", () => {
 	it("should encrypt and decrypt text correctly", () => {
@@ -26,85 +20,79 @@ describe("Encryption/Decryption", () => {
 		const encrypted = encrypt(original);
 		const decrypted = decrypt(encrypted);
 
-		assert.notStrictEqual(
-			encrypted,
-			original,
-			"Encrypted should differ from original",
-		);
-		assert.strictEqual(decrypted, original, "Decrypted should match original");
+		expect(encrypted).not.toBe(original);
+		expect(decrypted).toBe(original);
 	});
 
 	it("should handle empty string", () => {
-		assert.strictEqual(encrypt(""), "");
-		assert.strictEqual(decrypt(""), "");
+		expect(encrypt("")).toBe("");
+		expect(decrypt("")).toBe("");
 	});
 
 	it("should handle null/undefined gracefully", () => {
-		assert.strictEqual(encrypt(null), "");
-		assert.strictEqual(encrypt(undefined), "");
+		expect(encrypt(null)).toBe("");
+		expect(encrypt(undefined)).toBe("");
 	});
 
 	it("should return original if decryption fails", () => {
 		const invalid = "not-encrypted-text";
-		assert.strictEqual(decrypt(invalid), invalid);
+		expect(decrypt(invalid)).toBe(invalid);
 	});
 });
 
 describe("Session String Validation", () => {
 	it("should reject empty or null values", () => {
-		assert.strictEqual(isValidSessionString(""), false);
-		assert.strictEqual(isValidSessionString(null), false);
-		assert.strictEqual(isValidSessionString(undefined), false);
+		expect(isValidSessionString("")).toBe(false);
+		expect(isValidSessionString(null)).toBe(false);
+		expect(isValidSessionString(undefined)).toBe(false);
 	});
 
 	it("should reject short strings", () => {
-		assert.strictEqual(isValidSessionString("abc123"), false);
-		assert.strictEqual(isValidSessionString("a".repeat(50)), false);
+		expect(isValidSessionString("abc123")).toBe(false);
+		expect(isValidSessionString("a".repeat(50))).toBe(false);
 	});
 
 	it("should reject non-base64 strings", () => {
-		assert.strictEqual(isValidSessionString("!@#$%^&*()".repeat(20)), false);
+		expect(isValidSessionString("!@#$%^&*()".repeat(20))).toBe(false);
 	});
 
 	it("should accept valid base64 session-like strings", () => {
 		// Create a valid-looking base64 string of appropriate length
 		const validSession = Buffer.from("x".repeat(100)).toString("base64");
-		assert.strictEqual(isValidSessionString(validSession), true);
+		expect(isValidSessionString(validSession)).toBe(true);
 	});
 });
 
 describe("Phone Number Validation", () => {
 	it("should accept valid international numbers", () => {
-		assert.strictEqual(isValidPhoneNumber("+989123456789"), true);
-		assert.strictEqual(isValidPhoneNumber("+14155552671"), true);
-		assert.strictEqual(isValidPhoneNumber("+447700900123"), true);
+		expect(isValidPhoneNumber("+989123456789")).toBe(true);
+		expect(isValidPhoneNumber("+14155552671")).toBe(true);
+		expect(isValidPhoneNumber("+447700900123")).toBe(true);
 	});
 
 	it("should accept numbers without + prefix", () => {
-		assert.strictEqual(isValidPhoneNumber("989123456789"), true);
+		expect(isValidPhoneNumber("989123456789")).toBe(true);
 	});
 
 	it("should reject invalid numbers", () => {
-		assert.strictEqual(isValidPhoneNumber("123"), false);
-		assert.strictEqual(isValidPhoneNumber("abcdefghij"), false);
-		assert.strictEqual(isValidPhoneNumber(""), false);
-		assert.strictEqual(isValidPhoneNumber(null), false);
+		expect(isValidPhoneNumber("123")).toBe(false);
+		expect(isValidPhoneNumber("abcdefghij")).toBe(false);
+		expect(isValidPhoneNumber("")).toBe(false);
+		expect(isValidPhoneNumber(null)).toBe(false);
 	});
 
 	it("should handle numbers with formatting", () => {
-		assert.strictEqual(isValidPhoneNumber("+1 (415) 555-2671"), true);
-		assert.strictEqual(isValidPhoneNumber("+98-912-345-6789"), true);
+		expect(isValidPhoneNumber("+1 (415) 555-2671")).toBe(true);
+		expect(isValidPhoneNumber("+98-912-345-6789")).toBe(true);
 	});
 });
 
 describe("Error Sanitization", () => {
 	it("should translate common Telegram errors", () => {
-		assert.strictEqual(
-			sanitizeError({ message: "PHONE_NUMBER_INVALID" }),
+		expect(sanitizeError({ message: "PHONE_NUMBER_INVALID" })).toBe(
 			"شماره تلفن نامعتبر است",
 		);
-		assert.strictEqual(
-			sanitizeError({ message: "SESSION_EXPIRED" }),
+		expect(sanitizeError({ message: "SESSION_EXPIRED" })).toBe(
 			"نشست منقضی شده. لطفاً دوباره وارد شوید",
 		);
 	});
@@ -114,13 +102,13 @@ describe("Error Sanitization", () => {
 			message: "Error with session: ABC123XYZ456 and token: bot:12345",
 		};
 		const sanitized = sanitizeError(error);
-		assert.ok(!sanitized.includes("ABC123XYZ456"));
+		expect(sanitized).not.toContain("ABC123XYZ456");
 	});
 
 	it("should handle technical errors", () => {
 		const error = { message: '{"code": 500, "data": {"key": "value"}}' };
 		const sanitized = sanitizeError(error);
-		assert.ok(!sanitized.includes("{"));
+		expect(sanitized).not.toContain("{");
 	});
 });
 
@@ -135,7 +123,7 @@ describe("Rate Limiter", () => {
 
 		for (let i = 0; i < 5; i++) {
 			const result = rateLimiter.check(userId, "sensitive");
-			assert.strictEqual(result.allowed, true);
+			expect(result.allowed).toBe(true);
 		}
 	});
 
@@ -148,15 +136,15 @@ describe("Rate Limiter", () => {
 		}
 
 		const result = rateLimiter.check(userId, "sensitive");
-		assert.strictEqual(result.allowed, false);
-		assert.ok(result.waitSeconds > 0);
+		expect(result.allowed).toBe(false);
+		expect(result.waitSeconds).toBeGreaterThan(0);
 	});
 });
 
 describe("withTimeout", () => {
 	it("should resolve before timeout", async () => {
 		const result = await withTimeout(Promise.resolve("success"), 1000);
-		assert.strictEqual(result, "success");
+		expect(result).toBe("success");
 	});
 
 	it("should reject after timeout", async () => {
@@ -166,9 +154,9 @@ describe("withTimeout", () => {
 				100,
 				"Timed out",
 			);
-			assert.fail("Should have thrown");
+			expect.fail("Should have thrown");
 		} catch (error) {
-			assert.strictEqual(error.message, "Timed out");
+			expect(error.message).toBe("Timed out");
 		}
 	});
 });
@@ -181,8 +169,8 @@ describe("withRetry", () => {
 			return "success";
 		});
 
-		assert.strictEqual(result, "success");
-		assert.strictEqual(attempts, 1);
+		expect(result).toBe("success");
+		expect(attempts).toBe(1);
 	});
 
 	it("should retry on failure", async () => {
@@ -197,8 +185,8 @@ describe("withRetry", () => {
 			10,
 		);
 
-		assert.strictEqual(result, "success");
-		assert.strictEqual(attempts, 3);
+		expect(result).toBe("success");
+		expect(attempts).toBe(3);
 	});
 
 	it("should not retry on permanent errors", async () => {
@@ -213,9 +201,9 @@ describe("withRetry", () => {
 				3,
 				10,
 			);
-			assert.fail("Should have thrown");
+			expect.fail("Should have thrown");
 		} catch (_error) {
-			assert.strictEqual(attempts, 1);
+			expect(attempts).toBe(1);
 		}
 	});
 });
@@ -223,14 +211,14 @@ describe("withRetry", () => {
 describe("Utility Functions", () => {
 	it("hashForLog should return truncated hash", () => {
 		const hash = hashForLog("sensitive-data");
-		assert.ok(hash.endsWith("..."));
-		assert.strictEqual(hash.length, 11); // 8 chars + '...'
+		expect(hash).toMatch(/...$/);
+		expect(hash.length).toBe(11); // 8 chars + '...'
 	});
 
 	it("generateSecureToken should return hex string", () => {
 		const token = generateSecureToken(16);
-		assert.strictEqual(token.length, 32); // 16 bytes = 32 hex chars
-		assert.ok(/^[0-9a-f]+$/.test(token));
+		expect(token.length).toBe(32); // 16 bytes = 32 hex chars
+		expect(token).toMatch(/^[0-9a-f]+$/);
 	});
 
 	it("generateSecureToken should generate unique tokens", () => {
@@ -238,7 +226,7 @@ describe("Utility Functions", () => {
 		for (let i = 0; i < 100; i++) {
 			tokens.add(generateSecureToken());
 		}
-		assert.strictEqual(tokens.size, 100);
+		expect(tokens.size).toBe(100);
 	});
 });
 

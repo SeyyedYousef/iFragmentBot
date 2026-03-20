@@ -1,7 +1,7 @@
 import {
 	calculateRarity,
 	estimateValue,
-} from "../../core/Config/app.config.js";
+} from "../../Modules/Market/Application/oracle.service.js";
 import {
 	generateShortInsight,
 	getTonPrice,
@@ -14,6 +14,8 @@ import {
 import { tonPriceCache } from "../../Shared/Infra/Cache/cache.service.js";
 import { generateComparisonCard } from "../../Shared/UI/Components/comparison-card.component.js";
 import { generateComparisonReport } from "../Helpers/report.helper.js";
+import { getTemplates } from "../../Shared/Infra/Database/settings.repository.js";
+import { renderTemplate, fetchUserVariables } from "../../Shared/Infra/Telegram/telegram.cms.js";
 
 /**
  * Handle username comparison - fetch data and generate report
@@ -136,22 +138,39 @@ export async function handleComparison(ctx, username1, username2) {
 			},
 		};
 
+		// CMS Template Rendering
+		const templates = await getTemplates();
+		const globalVars = await fetchUserVariables(ctx.from.id, ctx);
+		
+		const finalReport = renderTemplate(templates.compare || report, {
+			...globalVars,
+			user1: username1,
+			user2: username2,
+			winner: estValue1.ton > estValue2.ton ? username1 : username2,
+			price_ton: String(tonPrice)
+		});
+
 		if (imageBuffer && imageBuffer.length > 1000) {
 			await ctx.replyWithPhoto(
 				{ source: Buffer.from(imageBuffer) },
 				{
-					caption: report,
-					parse_mode: "Markdown",
+					caption: finalReport,
+					parse_mode: "HTML",
 					...keyboard,
+					message_thread_id: ctx.message_thread_id
 				},
 			);
 		} else {
-			await ctx.replyWithMarkdown(report, keyboard);
+			await ctx.reply(finalReport, {
+				parse_mode: "HTML",
+				...keyboard,
+				message_thread_id: ctx.message_thread_id
+			});
 		}
 
 		// Deduct credit and show remaining
-		const creditResult = useFeature(ctx.from.id, "compare");
-		const creditsMsg = formatCreditsMessage(creditResult.remaining);
+		const creditResult = await useFeature(ctx.from.id, "compare");
+		const creditsMsg = formatCreditsMessage(creditResult.credits);
 		await ctx.replyWithMarkdown(creditsMsg);
 	} catch (error) {
 		console.error("Comparison error (Fatal):", error);

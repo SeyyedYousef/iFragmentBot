@@ -1,5 +1,10 @@
 {
 	"$schema": "https://biomejs.dev/schemas/2.4.7/schema.json",
+	"html": {
+		"parser": {
+			"interpolation": true
+		}
+	},
 	"linter": {
 		"enabled": true,
 		"rules": {
@@ -17,8 +22,19 @@
 	},
 	"overrides": [
 		{
-			"includes": ["*.json", "*.html", "*.md", "*.txt"],
-			"linter": { "enabled": false }
+			"includes": [
+				"**/*.json",
+				"**/*.html",
+				"**/*.md",
+				"**/*.txt",
+				"**/*.template.html"
+			],
+			"linter": {
+				"enabled": false
+			},
+			"formatter": {
+				"enabled": false
+			}
 		}
 	]
 }

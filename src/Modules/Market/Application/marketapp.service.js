@@ -28,7 +28,7 @@ function formatPct(p, digits = 1) {
 	return `${sign}${p.toFixed(digits)}%`;
 }
 
-function toTitleCase(s = "") {
+function _toTitleCase(s = "") {
 	if (!s) return "";
 	return s.charAt(0).toUpperCase() + s.slice(1);
 }
@@ -1748,7 +1748,7 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 	let _giftAssetEmission = null;
 	let _giftAssetCap = null;
 	let _collectionOffers = null;
-	let providersFee = null;
+	let _providersFee = null;
 	try {
 		const variants = [
 			`${parsed.collectionSlug}-${parsed.itemNumber}`,
@@ -1772,7 +1772,7 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 		_giftAssetEmission = gaEmission;
 		_giftAssetCap = gaCap;
 		_collectionOffers = gaOffers;
-		providersFee = gaFees;
+		_providersFee = gaFees;
 
 		for (const variant of variants) {
 			const gaGift = await giftAssetAPI.getGiftByName(variant);
@@ -1924,9 +1924,8 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 	report += `▸ #️⃣ Item: *#${formatNumber(parsed.itemNumber)}* of ${formatNumber(totalItems)}\n`;
 	report += `▸ 🏪 On Sale: *${formatNumber(onSale)}* (${totalItems > 0 ? ((onSale / totalItems) * 100).toFixed(1) : 0}%)\n`;
 	report += `▸ 👥 Owners: *${formatNumber(owners)}*\n`;
-	const vol24h = nanoToTon(ci?.volume24h) || null;
-	const vol7d = nanoToTon(ci?.volume7d) || volume7d || null;
-
+	const _vol24h = nanoToTon(ci?.volume24h) || null;
+	const _vol7d = nanoToTon(ci?.volume7d) || volume7d || null;
 
 	// ═══ 🐳 WHALE WATCH & OWNER INSIGHTS ═══
 	if (seetgData.ownerInfo) {
@@ -1985,7 +1984,6 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 	}
 
 	report += `\n`;
-
 
 	// ═══ 🧬 RARITY INDEX (Gift-Asset) ═══
 	if (giftAssetData?.rarity_index) {

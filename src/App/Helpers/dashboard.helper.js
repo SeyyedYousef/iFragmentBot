@@ -1,197 +1,122 @@
 /**
- * Dashboard Helper Module
- * Extracted from bot.entry.js — handles dashboard rendering,
- * greetings, tips, and market data retrieval.
+ * Dashboard & Initial State Orchestrator
+ * Refactored v18.0 — Performance & Clean Management
  */
 
 import { CONFIG } from "../../core/Config/app.config.js";
-import { get888Stats } from "../../Modules/Market/Application/market.service.js";
+import * as marketService from "../../Modules/Market/Application/market.service.js";
 import { getTonMarketStats } from "../../Modules/Market/Infrastructure/fragment.repository.js";
-import {
-	getRemainingLimits,
-	scanUserGiftsIfNeeded,
-	updateUserInfo,
-} from "../../Modules/User/Application/user.service.js";
+import { getRemainingLimits, getUser } from "../../Modules/User/Application/user.service.js";
 import { tonPriceCache } from "../../Shared/Infra/Cache/cache.service.js";
+import { formatPremiumHTML } from "../../Shared/Infra/Telegram/telegram.formatter.js";
 
-// ==================== GREETING HELPER ====================
-
-export function getGreeting(name) {
-	const hour = new Date().getHours();
-	if (hour >= 5 && hour < 12)
-		return { text: `*${name}*`, icon: "☀️", period: "Good Morning" };
-	if (hour >= 12 && hour < 18)
-		return { text: `*${name}*`, icon: "🌤", period: "Good Afternoon" };
-	if (hour >= 18 && hour < 22)
-		return { text: `*${name}*`, icon: "🌙", period: "Good Evening" };
-	return { text: `*${name}*`, icon: "🌃", period: "Night Owl Mode" };
-}
-
-// ==================== DASHBOARD DATA (from cache) ====================
+// Import UI Helpers
+import * as UI from "../Presentation/dashboard.ui.js";
+import { getDashboardConfig, getTemplates } from "../../Shared/Infra/Database/settings.repository.js";
+import { ensurePersonalWorkspace } from "../../Shared/Infra/Telegram/telegram.topics.js";
+import { renderTemplate } from "../../Shared/Infra/Telegram/telegram.cms.js";
 
 /**
- * Returns dashboard data INSTANTLY from cache.
- * All price updates happen in background via startBackgroundUpdates().
+ * Orchestrate dashboard rendering: Data fetching -> Formatting -> Delivery
  */
-export function getDashboardData() {
-	const tonStats = tonPriceCache.get("marketStats") || {
+export async function sendDashboard(ctx, isEdit = false) {
+	const userId = ctx.from.id;
+	const name = ctx.from.first_name || "Trader";
+
+	// Background non-blocking tasks
+	updateUserDataInBackground(ctx);
+
+	const config = await getDashboardConfig();
+	const templates = await getTemplates();
+	const marketData = getMarketPulse();
+	const { credits } = await getRemainingLimits(userId);
+
+	// Personal Workspace Check (Topics v9.4+)
+	let threadId = null;
+	if (config?.features?.topics_enabled && ctx.chat.type === "private") {
+		const workspace = await ensurePersonalWorkspace(ctx.telegram, userId);
+		if (workspace) threadId = workspace.pulse; // Main dashboard goes to pulse topic
+	}
+
+	// CMS Template Rendering
+	const message = renderTemplate(templates.start || UI.getDashboardMessage(name, marketData, credits), {
+		FIRSTNAME: ctx.from.first_name,
+		LASTNAME: ctx.from.last_name || "",
+		USERNAME: ctx.from.username ? `@${ctx.from.username}` : "User",
+		USERID: String(ctx.from.id),
+		BOT_NAME: CONFIG.BOT_NAME,
+		...marketData,
+		CREDITS: String(credits)
+	});
+
+	const keyboard = await UI.getDashboardKeyboard();
+
+	try {
+		const options = {
+			parse_mode: "HTML",
+			disable_web_page_preview: true,
+			reply_markup: keyboard.reply_markup,
+		};
+		if (threadId) options.message_thread_id = threadId;
+		if (isEdit) {
+			await ctx.editMessageText(message, options).catch(async (e) => {
+				if (!e.message.includes("not modified"))
+					await ctx.reply(message, options);
+			});
+		} else {
+			await ctx.reply(message, options);
+		}
+	} catch (e) {
+		console.error("Dashboard send failed", e.message);
+	}
+}
+
+// -------------------- DATA ORCHESTRATION --------------------
+
+function getMarketPulse() {
+	const ton = tonPriceCache.get("marketStats") || {
 		price: 5.5,
 		change24h: 0,
 		timestamp: 0,
 	};
 	const floor888 = tonPriceCache.get("floor888");
 
-	// If stale, trigger background update (non-blocking)
-	const TWO_HOURS = 2 * 60 * 60 * 1000;
-	if (!tonStats.timestamp || Date.now() - tonStats.timestamp > TWO_HOURS) {
-		getTonMarketStats()
-			.then((freshStats) => {
-				if (freshStats && freshStats.price > 0) {
-					tonPriceCache.set("marketStats", {
-						...freshStats,
-						timestamp: Date.now(),
-					});
-					tonPriceCache.set("price", freshStats.price);
-				}
-			})
-			.catch(() => {});
-	}
-
-	// Background 888 update if stale
-	if (
-		!floor888 ||
-		!floor888.timestamp ||
-		Date.now() - floor888.timestamp > 60 * 60 * 1000
-	) {
-		get888Stats()
-			.then((p) => {
-				if (p)
-					tonPriceCache.set("floor888", { price: p, timestamp: Date.now() });
-			})
-			.catch(() => {});
-	}
+	// Trigger background sync if stale (staggered)
+	if (!ton.timestamp || Date.now() - ton.timestamp > 7200000) syncTonMarket();
+	if (!floor888 || Date.now() - floor888.timestamp > 3600000) sync888Floor();
 
 	return {
-		tonPrice: tonStats.price || 5.5,
-		tonChange: tonStats.change24h || 0,
-		price888: floor888 ? floor888.price : null,
+		tonPrice: ton.price,
+		tonChange: ton.change24h,
+		price888: floor888?.price,
 	};
 }
 
-// ==================== SEND DASHBOARD ====================
-
-export async function sendDashboard(ctx, isEdit = false, forceAdmin = false) {
+async function updateUserDataInBackground(ctx) {
 	const userId = ctx.from.id;
-	// Helper to check admin if not forced
-	const _isAdminUser =
-		forceAdmin ||
-		String(userId) === String(CONFIG.ADMIN_ID) ||
-		String(userId) === String(process.env.ADMIN_USER_ID);
+	// Self-correcting user profile
+	const user = await getUser(userId);
+	user.username = ctx.from.username;
+	user.firstName = ctx.from.first_name;
 
-	// Show typing status while fetching data
-	if (!isEdit)
-		ctx.telegram.sendChatAction(ctx.chat.id, "typing").catch(() => {});
+	// TODO: scanUserGiftsIfNeeded(userId) can be added later
+}
 
-	const { tonPrice, tonChange, price888 } = getDashboardData();
-	const firstName = ctx.from.first_name || "Trader";
+// -------------------- SYNC HELPERS (Silent) --------------------
 
-	// Save user info for leaderboard display
-	updateUserInfo(userId, ctx.from.username, firstName);
-
-	// Trigger background gift scan (non-blocking)
-	scanUserGiftsIfNeeded(userId).catch((err) =>
-		console.error("Background gift scan error:", err),
-	);
-
-	// Get personalized data
-	const greeting = getGreeting(firstName);
-	const remaining = getRemainingLimits(userId);
-	const credits = remaining.credits || 0;
-
-	// -- Market Pulse --
-	const changeIcon = tonChange >= 0 ? "📈" : "📉";
-	const sign = tonChange >= 0 ? "+" : "";
-	const changeText = `${sign + tonChange.toFixed(2)}%`;
-
-	// ═══════════════════════════════
-	//  ULTRA-PRO DASHBOARD FORMAT
-	// ═══════════════════════════════
-
-	let message = "";
-
-	// ── BRAND HEADER ──
-	message += `✦ *iFragment Main Menu*\n`;
-	message += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
-
-	// ── GREETING ──
-	message += `${greeting.icon} ${greeting.period}, ${greeting.text}\n`;
-	message += `_This bot provides advanced analytics and real-time valuation for Fragment assets._\n\n`;
-
-	// ── LIVE MARKET ──
-	message += `🌍 *Live Market Overview*\n`;
-	message += `├ 💎 *TON:* \`$${tonPrice.toFixed(2)}\` ${changeIcon} ${changeText}\n`;
-	if (price888) {
-		message += `└ 🏴‍☠️ *+888:* \`${price888.toLocaleString()} TON\`\n`;
-	} else {
-		message += `└ 🏴‍☠️ *+888:* \`Synching...\`\n`;
-	}
-	message += `\n`;
-
-	message += `💳 *Your Balance:* \`${credits} FRG\`\n\n`;
-
-	message += `💎 *How to get FRG:*\n`;
-	message += `Earn **+300 FRG** by sending messages in the [Fragment Investors](https://t.me/FragmentInvestors) club.\n\n`;
-
-	// ── CTA ──
-	message += `👇 *Please select a service from the menu below:*`;
-
-	// ═══════════════════════════════
-	//  KEYBOARD — Premium Compact Layout
-	// ═══════════════════════════════
-
-	const keyboardButtons = [
-		// Row 1
-		[
-			{ text: "🆔 Username", callback_data: "report_username" },
-			{ text: "🎁 Gift", callback_data: "report_gifts" },
-			{ text: "🏴‍☠️ +888", callback_data: "report_numbers" },
-		],
-		// Row 2
-		[
-			{ text: "💼 Wallet Tracker", callback_data: "menu_portfolio" },
-			{ text: "⚖️ Compare Usernames", callback_data: "menu_compare" },
-		],
-		// Row 3
-		[{ text: "⚙️ My Profile", callback_data: "menu_account" }],
-	];
-
-	const keyboard = {
-		reply_markup: {
-			inline_keyboard: keyboardButtons,
-		},
-	};
-
-	if (isEdit) {
-		try {
-			await ctx.editMessageText(message, {
-				parse_mode: "Markdown",
-				disable_web_page_preview: true,
-				...keyboard,
-			});
-		} catch (e) {
-			if (!e.message.includes("message is not modified")) {
-				await ctx.reply(message, {
-					parse_mode: "Markdown",
-					disable_web_page_preview: true,
-					...keyboard,
-				});
-			}
+async function syncTonMarket() {
+	try {
+		const fresh = await getTonMarketStats();
+		if (fresh?.price > 0) {
+			tonPriceCache.set("marketStats", { ...fresh, timestamp: Date.now() });
+			tonPriceCache.set("price", fresh.price);
 		}
-	} else {
-		await ctx.reply(message, {
-			parse_mode: "Markdown",
-			disable_web_page_preview: true,
-			...keyboard,
-		});
-	}
+	} catch {}
+}
+
+async function sync888Floor() {
+	try {
+		const price = await marketService.get888Stats();
+		if (price) tonPriceCache.set("floor888", { price, timestamp: Date.now() });
+	} catch {}
 }

@@ -146,7 +146,7 @@ export async function scrapeFragment(url, options = {}) {
 			type: "custom",
 			wait: options.wait || ".tm-section",
 		});
-	} catch (e) {
+	} catch (_e) {
 		console.warn(`⚠️ Primary Scrapling failed for ${url}, trying Puppeteer...`);
 		return await puppeteerScrape(url, options);
 	}
@@ -162,12 +162,14 @@ export async function puppeteerScrape(url, options = {}) {
 	try {
 		browser = await getBrowser();
 		page = await browser.newPage();
-		
+
 		// Set a real user agent
-		await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
-		
+		await page.setUserAgent(
+			"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+		);
+
 		await page.goto(url, { waitUntil: "networkidle2", timeout: timeoutMs });
-		
+
 		if (wait) {
 			try {
 				await page.waitForSelector(wait, { timeout: 10000 });
@@ -181,7 +183,7 @@ export async function puppeteerScrape(url, options = {}) {
 			url,
 			status: 200,
 			success: true,
-			html
+			html,
 		};
 	} catch (e) {
 		console.error(`❌ Puppeteer scrape failed: ${e.message}`);
