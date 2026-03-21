@@ -39,7 +39,7 @@ async function fetchPortals(slug) {
     // Attempting Portals Web3 interface or direct API fallback
     const url = `https://portals.tg/market/collection/${slug}`;
     try {
-        const payload = await scrapeFragment(url, { wait: 5000, type: "custom" });
+        const payload = await scrapeFragment(url, { timeoutMs: 15000, type: "custom" });
         return payload?.html || "";
     } catch (e) {
         console.warn(`⚠️ Portals Fetch Failed for ${slug}: ${e.message}`);
@@ -54,7 +54,7 @@ async function fetchTonnel(slug) {
     // Tonnel relies heavily on client-side JS and DDOS protection
     const url = `https://market.tonnel.network/collection/${slug}`;
     try {
-        const payload = await scrapeFragment(url, { wait: 5000, type: "custom" });
+        const payload = await scrapeFragment(url, { timeoutMs: 15000, type: "custom" });
         return payload?.html || "";
     } catch (e) {
         console.warn(`⚠️ Tonnel Fetch Failed for ${slug}: ${e.message}`);
