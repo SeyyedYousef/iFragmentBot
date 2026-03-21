@@ -11,6 +11,7 @@ import * as seetg from "../../Automation/Application/seetg.service.js";
 import * as accountManager from "../../User/Application/account-manager.service.js";
 import giftAssetAPI from "../Infrastructure/free_gift_engine.api.js";
 import * as salesHistory from "./sales-history.service.js";
+import { getCrossMarketData } from "../Infrastructure/cross-market.repository.js";
 
 // API Configuration
 const MARKETAPP_API_BASE = "https://api.marketapp.ws";
@@ -1229,6 +1230,7 @@ function estimateGiftValue(
 		dataQuality,
 		historicalPrediction,
 		advancedData,
+		crossMarket: crossMarketData,
 		valueRange: (() => {
 			const confFactor =
 				confidenceScore >= 80 ? 0.15 : confidenceScore >= 60 ? 0.25 : 0.35;
@@ -1787,15 +1789,18 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 	}
 
 	// Get market prices for similar gifts
-	const marketPrices = await getMarketPricesForSimilarGifts(
-		collection.address,
-		parsed.collectionSlug,
-		{
-			model: giftAttributes.model,
-			backdrop: giftAttributes.backdrop,
-			symbol: giftAttributes.symbol,
-		},
-	);
+	const [marketPrices, crossMarketData] = await Promise.all([
+		getMarketPricesForSimilarGifts(
+			collection.address,
+			parsed.collectionSlug,
+			{
+				model: giftAttributes.model,
+				backdrop: giftAttributes.backdrop,
+				symbol: giftAttributes.symbol,
+			},
+		),
+		getCrossMarketData(parsed.collectionSlug),
+	]);
 
 	// Estimate value with enhanced algorithm V2.0
 	const estimation = estimateGiftValue(

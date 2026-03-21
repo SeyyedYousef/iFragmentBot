@@ -365,7 +365,14 @@ export function getTplEditorMessage(key, currentContent) {
 			"{price_ton} - Valuation in TON",
 			"{verdict} - AI verdict (Undervalued, etc.)",
 			"{color} - Collection theme color",
-			"{badges} - Special attributes list"
+			"{badges} - Special attributes list",
+			"---------- Cross Market ----------",
+			"{floor_portals} - Floor price on Portals.tg",
+			"{floor_tonnel} - Floor price on Tonnel Network",
+			"{volume_portals} - Total volume on Portals.tg",
+			"{volume_tonnel} - Total volume on Tonnel Network",
+			"{last_sale_portals} - Last sale price on Portals.tg",
+			"{last_sale_tonnel} - Last sale price on Tonnel Network"
 		],
 		report_number: [
 			"{formatted_number} - Visual number (+888...)",

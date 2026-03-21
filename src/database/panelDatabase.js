@@ -5,7 +5,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import Database from "better-sqlite3";
+import { Database } from "bun:sqlite";
 
 // Ensure data directory exists
 const DATA_DIR = path.join(process.cwd(), "data");

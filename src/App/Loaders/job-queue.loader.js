@@ -43,7 +43,6 @@ export async function initJobHandlers(bot) {
 		try {
 			const result = await generateGiftReport(link, tonPrice);
 
-			// CMS Template Rendering
 			const finalCaption = renderTemplate(templates.gifts || result.report, {
 				...globalVars,
 				collection: result.collection,
@@ -53,7 +52,13 @@ export async function initJobHandlers(bot) {
 				price_usd: String(Math.round(result.estimatedValue * tonPrice)),
 				color: result.color || "",
 				slug: result.slug || "",
-				badges: (result.badges || []).join(", ")
+				badges: (result.badges || []).join(", "),
+				floor_portals: String(result.crossMarket?.portals?.floor || "N/A"),
+				floor_tonnel: String(result.crossMarket?.tonnel?.floor || "N/A"),
+				volume_portals: String(result.crossMarket?.portals?.volume || "N/A"),
+				volume_tonnel: String(result.crossMarket?.tonnel?.volume || "N/A"),
+				last_sale_portals: String(result.crossMarket?.portals?.lastSale || "N/A"),
+				last_sale_tonnel: String(result.crossMarket?.tonnel?.lastSale || "N/A"),
 			});
 
 			// Send textual report
