@@ -27,13 +27,18 @@ function registerProxyRoutes(bot, isAdmin) {
 	bot.action("settings_proxy_status", async (ctx) => {
 		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery("❌ Access denied");
 		await ctx.answerCbQuery();
-		const stats = await proxyManager.getProxyStats();
-		const allProxies = await proxyManager.getAllProxies();
-		const preview = allProxies.slice(0, 10);
-		await ctx.editMessageText(UI.getProxyStatusMessage(stats, preview), {
-			parse_mode: "Markdown",
-			...UI.getProxyStatusKeyboard(),
-		});
+		try {
+			const stats = await proxyManager.getProxyStats();
+			const allProxies = await proxyManager.getAllProxies();
+			const preview = allProxies.slice(0, 10);
+			await ctx.editMessageText(UI.getProxyStatusMessage(stats, preview), {
+				parse_mode: "Markdown",
+				...UI.getProxyStatusKeyboard(),
+			});
+		} catch (error) {
+			console.error("Proxy Status Error:", error);
+			await ctx.reply("❌ خطا در دریافت وضعیت پروکسی. دیتابیس متصل نیست؟");
+		}
 	});
 
 	// Action: Test All Proxies
@@ -228,11 +233,16 @@ function registerRestRoutes(bot, isAdmin) {
 	bot.action("settings_rest_time", async (ctx) => {
 		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery();
 		await ctx.answerCbQuery();
-		const current = await settings.get("rest_time", 30);
-		await ctx.editMessageText(UI.getRestTimeMessage(current), {
-			parse_mode: "Markdown",
-			...UI.getRestTimeKeyboard(),
-		});
+		try {
+			const current = await settings.get("rest_time", 30);
+			await ctx.editMessageText(UI.getRestTimeMessage(current), {
+				parse_mode: "Markdown",
+				...UI.getRestTimeKeyboard(),
+			});
+		} catch (error) {
+			console.error("Rest Config Error:", error);
+			await ctx.reply("❌ خطا در خواندن تنظیمات استراحت از دیتابیس.");
+		}
 	});
 
 	bot.action(/^set_rest:(\d+)$/, async (ctx) => {
@@ -256,11 +266,16 @@ function registerRestRoutes(bot, isAdmin) {
 	bot.action("settings_account_mode", async (ctx) => {
 		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery();
 		await ctx.answerCbQuery();
-		const mode = await settings.get("account_mode", "sequential");
-		await ctx.editMessageText(UI.getAccountModeMessage(mode), {
-			parse_mode: "Markdown",
-			...UI.getAccountModeKeyboard(mode),
-		});
+		try {
+			const mode = await settings.get("account_mode", "sequential");
+			await ctx.editMessageText(UI.getAccountModeMessage(mode), {
+				parse_mode: "Markdown",
+				...UI.getAccountModeKeyboard(mode),
+			});
+		} catch (error) {
+			console.error("Account Mode Config Error:", error);
+			await ctx.reply("❌ خطا در خواندن حالت اکانت از دیتابیس.");
+		}
 	});
 
 	bot.action(/^set_mode:(sequential|concurrent)$/, async (ctx) => {

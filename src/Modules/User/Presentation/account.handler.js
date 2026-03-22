@@ -336,41 +336,46 @@ Session String اکانت را ارسال کنید.
 		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery("دسترسی ندارید");
 		await ctx.answerCbQuery("⏳ دریافت لیست...");
 
-		const accounts = accountManager.getAccountList();
-		if (accounts.length === 0) {
-			return ctx.editMessageText("❌ هیچ اکانتی وجود ندارد.", {
+		try {
+			const accounts = accountManager.getAccountList();
+			if (accounts.length === 0) {
+				return ctx.editMessageText("❌ هیچ اکانتی وجود ندارد.", {
+					reply_markup: {
+						inline_keyboard: [
+							[
+								{ text: "➕ افزودن اکانت", callback_data: "panel_add_account" },
+								{ text: "🔙 بازگشت", callback_data: "panel_accounts" },
+							],
+						],
+					},
+				});
+			}
+
+			let msg = `📋 *لیست اکانت‌های متصل (${accounts.length})*\n\n`;
+			for (let i = 0; i < accounts.length; i++) {
+				const acc = accounts[i];
+				const status = await accountStatus.get(acc.phone);
+				const statusEmoji = status?.is_reported
+					? "🔴"
+					: status?.is_resting
+						? "🟡"
+						: "🟢";
+				msg += `${i + 1}. ${statusEmoji} \`${acc.phone}\` | @${acc.username || "NoUser"}\n`;
+			}
+
+			await ctx.editMessageText(msg, {
+				parse_mode: "Markdown",
 				reply_markup: {
 					inline_keyboard: [
-						[
-							{ text: "➕ افزودن اکانت", callback_data: "panel_add_account" },
-							{ text: "🔙 بازگشت", callback_data: "panel_accounts" },
-						],
+						[{ text: "⚙️ مدیریت تکی", callback_data: "panel_manage_selection" }],
+						[{ text: "🔙 بازگشت", callback_data: "panel_accounts" }],
 					],
 				},
 			});
+		} catch (error) {
+			console.error("List Accounts Error:", error);
+			await ctx.reply("❌ خطا در دریافت لیست از دیتابیس.");
 		}
-
-		let msg = `📋 *لیست اکانت‌های متصل (${accounts.length})*\n\n`;
-		for (let i = 0; i < accounts.length; i++) {
-			const acc = accounts[i];
-			const status = await accountStatus.get(acc.phone);
-			const statusEmoji = status?.is_reported
-				? "🔴"
-				: status?.is_resting
-					? "🟡"
-					: "🟢";
-			msg += `${i + 1}. ${statusEmoji} \`${acc.phone}\` | @${acc.username || "NoUser"}\n`;
-		}
-
-		await ctx.editMessageText(msg, {
-			parse_mode: "Markdown",
-			reply_markup: {
-				inline_keyboard: [
-					[{ text: "⚙️ مدیریت تکی", callback_data: "panel_manage_selection" }],
-					[{ text: "🔙 بازگشت", callback_data: "panel_accounts" }],
-				],
-			},
-		});
 	});
 
 	// Account Status Overview
@@ -378,10 +383,11 @@ Session String اکانت را ارسال کنید.
 		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery("دسترسی ندارید");
 		await ctx.answerCbQuery();
 
-		const stats = await accountStatus.getStats();
-		const accounts = accountManager.getAccountList();
+		try {
+			const stats = await accountStatus.getStats();
+			const accounts = accountManager.getAccountList();
 
-		const msg = `
+			const msg = `
 📊 *وضعیت کلی اکانت‌ها*
 
 📱 تعداد کل: \`${accounts.length}\`
@@ -392,16 +398,20 @@ Session String اکانت را ارسال کنید.
 ⏱ آخرین بروزرسانی: ${new Date().toLocaleTimeString("fa-IR")}
         `.trim();
 
-		await ctx.editMessageText(msg, {
-			parse_mode: "Markdown",
-			reply_markup: {
-				inline_keyboard: [
-					[{ text: "🔄 بروزرسانی", callback_data: "panel_account_status" }],
-					[{ text: "🔍 چک سلامت دقیق", callback_data: "panel_check_health" }],
-					[{ text: "🔙 بازگشت", callback_data: "panel_accounts" }],
-				],
-			},
-		});
+			await ctx.editMessageText(msg, {
+				parse_mode: "Markdown",
+				reply_markup: {
+					inline_keyboard: [
+						[{ text: "🔄 بروزرسانی", callback_data: "panel_account_status" }],
+						[{ text: "🔍 چک سلامت دقیق", callback_data: "panel_check_health" }],
+						[{ text: "🔙 بازگشت", callback_data: "panel_accounts" }],
+					],
+				},
+			});
+		} catch (error) {
+			console.error("Account Status Panel Error:", error);
+			await ctx.reply("❌ خطا در دریافت آمار از دیتابیس.");
+		}
 	});
 
 	// Backup accounts (Step 1: Ask for password)

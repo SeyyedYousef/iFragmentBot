@@ -125,17 +125,22 @@ function registerOrderRoutes(bot, isAdmin) {
 	bot.action("adder_order_status", async (ctx) => {
 		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery();
 		await ctx.answerCbQuery();
-		const running = await orders.getRunning();
-		const all = (await orders.getAll()).slice(0, 10);
-		await ctx.editMessageText(UI.getOrderStatusMessage(running, all), {
-			parse_mode: "Markdown",
-			reply_markup: {
-				inline_keyboard: [
-					[{ text: "🔄 بروزرسانی", callback_data: "adder_order_status" }],
-					[{ text: "🔙 بازگشت", callback_data: "panel_adder" }],
-				],
-			},
-		});
+		try {
+			const running = await orders.getRunning();
+			const all = (await orders.getAll()).slice(0, 10);
+			await ctx.editMessageText(UI.getOrderStatusMessage(running, all), {
+				parse_mode: "Markdown",
+				reply_markup: {
+					inline_keyboard: [
+						[{ text: "🔄 بروزرسانی", callback_data: "adder_order_status" }],
+						[{ text: "🔙 بازگشت", callback_data: "panel_adder" }],
+					],
+				},
+			});
+		} catch (error) {
+			console.error("Order Status Error:", error);
+			await ctx.reply("❌ خطا در دریافت وضعیت سفارشات. دیتابیس متصل نیست؟");
+		}
 	});
 }
 

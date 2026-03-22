@@ -93,12 +93,20 @@ function registerAccountRoutes(bot, isAdmin) {
 	bot.action("panel_accounts", async (ctx) => {
 		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery("❌ Access denied");
 		await ctx.answerCbQuery();
-		const accounts = accountManager.getAccountList();
-		const stats = await accountStatus.getStats();
-		await ctx.editMessageText(UI.getAccountsMessage(accounts, stats), {
-			parse_mode: "Markdown",
-			...UI.getAccountsKeyboard(),
-		});
+		try {
+			const accounts = accountManager.getAccountList();
+			const stats = await accountStatus.getStats();
+			await ctx.editMessageText(UI.getAccountsMessage(accounts, stats), {
+				parse_mode: "Markdown",
+				...UI.getAccountsKeyboard(),
+			});
+		} catch (error) {
+			console.error("Panel Accounts Error:", error);
+			const errorMsg = error.message.includes("Database not connected")
+				? "❌ دیتابیس متصل نیست. لطفاً MONGODB_URI را چک کنید."
+				: "❌ خطای غیرمنتظره در پنل مدیریت.";
+			await ctx.reply(errorMsg);
+		}
 	});
 
 	// Account List With Pagination
@@ -234,11 +242,16 @@ function registerAdderRoutes(bot, isAdmin) {
 	bot.action("panel_adder", async (ctx) => {
 		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery("❌ Access denied");
 		await ctx.answerCbQuery();
-		const orderStats = await orders.getStats();
-		await ctx.editMessageText(UI.getAdderManagementMessage(orderStats), {
-			parse_mode: "Markdown",
-			...UI.getAdderManagementKeyboard(),
-		});
+		try {
+			const orderStats = await orders.getStats();
+			await ctx.editMessageText(UI.getAdderManagementMessage(orderStats), {
+				parse_mode: "Markdown",
+				...UI.getAdderManagementKeyboard(),
+			});
+		} catch (error) {
+			console.error("Adder Status Error:", error);
+			await ctx.reply("❌ خطا در دریافت اطلاعات ادر. دیتابیس متصل نیست؟");
+		}
 	});
 
 	bot.action("adder_bot_stats", async (ctx) => {
@@ -270,12 +283,17 @@ function registerAdderRoutes(bot, isAdmin) {
 	bot.action("panel_settings", async (ctx) => {
 		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery();
 		await ctx.answerCbQuery();
-		const proxyCount = await proxies.count();
-		const restTime = await settings.get("rest_time", 30);
-		await ctx.editMessageText(UI.getSettingsMessage(proxyCount, restTime), {
-			parse_mode: "Markdown",
-			...UI.getSettingsKeyboard(),
-		});
+		try {
+			const proxyCount = await proxies.count();
+			const restTime = await settings.get("rest_time", 30);
+			await ctx.editMessageText(UI.getSettingsMessage(proxyCount, restTime), {
+				parse_mode: "Markdown",
+				...UI.getSettingsKeyboard(),
+			});
+		} catch (error) {
+			console.error("Settings Panel Error:", error);
+			await ctx.reply("❌ خطا در بارگذاری تنظیمات دیتابیس.");
+		}
 	});
 }
 
@@ -285,11 +303,16 @@ function registerFakePanelRoutes(bot, isAdmin) {
 	bot.action("panel_fake", async (ctx) => {
 		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery();
 		await ctx.answerCbQuery();
-		const orderStats = await orders.getStats();
-		await ctx.editMessageText(UI.getFakePanelMessage(orderStats), {
-			parse_mode: "Markdown",
-			...UI.getFakePanelKeyboard(),
-		});
+		try {
+			const orderStats = await orders.getStats();
+			await ctx.editMessageText(UI.getFakePanelMessage(orderStats), {
+				parse_mode: "Markdown",
+				...UI.getFakePanelKeyboard(),
+			});
+		} catch (error) {
+			console.error("Fake Panel Error:", error);
+			await ctx.reply("❌ خطا در بارگذاری پنل فیک.");
+		}
 	});
 }
 
