@@ -285,7 +285,7 @@ Session String اکانت را ارسال کنید.
 
 			if (success) {
 				try {
-					accountStatus.delete(phone);
+					await accountStatus.delete(phone);
 				} catch (e) {
 					console.error("Failed to cleanup account status:", e);
 				}
@@ -351,15 +351,16 @@ Session String اکانت را ارسال کنید.
 		}
 
 		let msg = `📋 *لیست اکانت‌های متصل (${accounts.length})*\n\n`;
-		accounts.forEach((acc, i) => {
-			const status = accountStatus.get(acc.phone);
+		for (let i = 0; i < accounts.length; i++) {
+			const acc = accounts[i];
+			const status = await accountStatus.get(acc.phone);
 			const statusEmoji = status?.is_reported
 				? "🔴"
 				: status?.is_resting
 					? "🟡"
 					: "🟢";
 			msg += `${i + 1}. ${statusEmoji} \`${acc.phone}\` | @${acc.username || "NoUser"}\n`;
-		});
+		}
 
 		await ctx.editMessageText(msg, {
 			parse_mode: "Markdown",
@@ -377,7 +378,7 @@ Session String اکانت را ارسال کنید.
 		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery("دسترسی ندارید");
 		await ctx.answerCbQuery();
 
-		const stats = accountStatus.getStats();
+		const stats = await accountStatus.getStats();
 		const accounts = accountManager.getAccountList();
 
 		const msg = `
@@ -597,7 +598,7 @@ Session String اکانت را ارسال کنید.
 				const identity = identityService.generateIdentity(type);
 
 				// Add to database first
-				const profileId = profileManager.addProfile(
+				const profileId = await profileManager.addProfile(
 					identity.firstName,
 					identity.lastName,
 					identity.bio,

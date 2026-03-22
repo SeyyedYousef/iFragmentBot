@@ -139,7 +139,7 @@ export async function addContactsToGroup(inviteLink, callback) {
 		if (state.isPaused) await new Promise((r) => setTimeout(r, 2000));
 		if (!state.isAdding) break;
 
-		const acc = getAvailableAccount();
+		const acc = await getAvailableAccount();
 		if (!acc) {
 			console.warn("Limits hit for all accounts");
 			break;
@@ -183,15 +183,19 @@ export async function addContactsToGroup(inviteLink, callback) {
 
 // -------------------- HELPERS --------------------
 
-function getAvailableAccount() {
+async function getAvailableAccount() {
 	const accounts = accountManager.getAccountList().filter((a) => a.connected);
 	const today = new Date().toDateString();
-	return accounts.find((acc) => {
+    
+    for (const acc of accounts) {
 		const key = `${acc.phone}_${today}`;
 		const usage = accountUsage.get(key) || { adds: 0 };
-		const limit = healthGuard.getDailyLimit(acc);
-		return usage.adds < limit;
-	});
+		const limit = await healthGuard.getDailyLimit(acc);
+		if (usage.adds < limit) {
+            return acc;
+        }
+	}
+	return null;
 }
 
 function recordAccountUsage(phone) {

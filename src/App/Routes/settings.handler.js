@@ -27,8 +27,8 @@ function registerProxyRoutes(bot, isAdmin) {
 	bot.action("settings_proxy_status", async (ctx) => {
 		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery("❌ Access denied");
 		await ctx.answerCbQuery();
-		const stats = proxyManager.getProxyStats();
-		const allProxies = proxyManager.getAllProxies();
+		const stats = await proxyManager.getProxyStats();
+		const allProxies = await proxyManager.getAllProxies();
 		const preview = allProxies.slice(0, 10);
 		await ctx.editMessageText(UI.getProxyStatusMessage(stats, preview), {
 			parse_mode: "Markdown",
@@ -40,7 +40,7 @@ function registerProxyRoutes(bot, isAdmin) {
 	bot.action("settings_test_proxies", async (ctx) => {
 		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery();
 		await ctx.answerCbQuery("⏳ در حال تست پروکسی‌ها...");
-		const allProxies = proxyManager.getAllProxies();
+		const allProxies = await proxyManager.getAllProxies();
 		if (allProxies.length === 0)
 			return ctx.editMessageText("❌ هیچ پروکسی‌ای ثبت نشده.", {
 				reply_markup: {
@@ -119,7 +119,7 @@ function registerProxyRoutes(bot, isAdmin) {
 
 	bot.action("confirm_delete_proxies", async (ctx) => {
 		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery();
-		proxyManager.deleteAllProxies();
+		await proxyManager.deleteAllProxies();
 		await ctx.answerCbQuery("✅ حذف شدند");
 		await ctx.editMessageText("✅ همه پروکسی‌ها حذف شدند.", {
 			reply_markup: {
@@ -228,7 +228,7 @@ function registerRestRoutes(bot, isAdmin) {
 	bot.action("settings_rest_time", async (ctx) => {
 		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery();
 		await ctx.answerCbQuery();
-		const current = settings.get("rest_time", 30);
+		const current = await settings.get("rest_time", 30);
 		await ctx.editMessageText(UI.getRestTimeMessage(current), {
 			parse_mode: "Markdown",
 			...UI.getRestTimeKeyboard(),
@@ -238,7 +238,7 @@ function registerRestRoutes(bot, isAdmin) {
 	bot.action(/^set_rest:(\d+)$/, async (ctx) => {
 		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery();
 		const mins = parseInt(ctx.match[1], 10);
-		settings.set("rest_time", mins);
+		await settings.set("rest_time", mins);
 		await ctx.answerCbQuery(`✅ زمان استراحت: ${mins} دقیقه`);
 		await ctx.editMessageText(
 			`✅ *زمان استراحت ذخیره شد*\n\nمدت جدید: \`${mins} دقیقه\``,
@@ -256,7 +256,7 @@ function registerRestRoutes(bot, isAdmin) {
 	bot.action("settings_account_mode", async (ctx) => {
 		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery();
 		await ctx.answerCbQuery();
-		const mode = settings.get("account_mode", "sequential");
+		const mode = await settings.get("account_mode", "sequential");
 		await ctx.editMessageText(UI.getAccountModeMessage(mode), {
 			parse_mode: "Markdown",
 			...UI.getAccountModeKeyboard(mode),
@@ -266,7 +266,7 @@ function registerRestRoutes(bot, isAdmin) {
 	bot.action(/^set_mode:(sequential|concurrent)$/, async (ctx) => {
 		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery();
 		const mode = ctx.match[1];
-		settings.set("account_mode", mode);
+		await settings.set("account_mode", mode);
 		await ctx.answerCbQuery(
 			`✅ حالت: ${mode === "sequential" ? "ترتیبی" : "همزمان"}`,
 		);
@@ -293,7 +293,7 @@ export async function handleSettingsTextMessage(ctx, state) {
 		const lines = input.split("\n").filter((l) => l.trim().length > 0);
 		let added = 0;
 		for (const line of lines) {
-			const success = proxyManager.addProxy(line.trim());
+			const success = await proxyManager.addProxy(line.trim());
 			if (success) added++;
 		}
 		await ctx.reply(`✅ پروکسی‌ها بررسی شدند.\n📥 تعداد اضافه شده: \`${added}\``, {

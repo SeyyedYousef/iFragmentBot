@@ -47,10 +47,11 @@ export function calculateTrustScore(account) {
 /**
  * Get Daily Limit based on score
  */
-export function getDailyLimit(accountOrPhone) {
+export async function getDailyLimit(accountOrPhone) {
 	let account = accountOrPhone;
 	if (typeof account === "string") {
-		account = accounts.getAll().find((a) => a.phone === account);
+		const allAccounts = await accounts.getAll();
+		account = allAccounts.find((a) => a.phone === account);
 	}
 	if (!account) return CONFIG.LIMITS.LOW.LIMIT;
 	const score = calculateTrustScore(account);
@@ -62,10 +63,11 @@ export function getDailyLimit(accountOrPhone) {
 /**
  * Get Health Report for an account
  */
-export function getHealthReport(accountOrPhone) {
+export async function getHealthReport(accountOrPhone) {
 	let account = accountOrPhone;
 	if (typeof account === "string") {
-		account = accounts.getAll().find((a) => a.phone === account);
+		const allAccounts = await accounts.getAll();
+		account = allAccounts.find((a) => a.phone === account);
 	}
 	if (!account) return null;
 
@@ -77,7 +79,7 @@ export function getHealthReport(accountOrPhone) {
 	return {
 		phone: account.phone,
 		score,
-		limit: getDailyLimit(account),
+		limit: await getDailyLimit(account),
 		status,
 		age: account.addedAt
 			? Math.floor(

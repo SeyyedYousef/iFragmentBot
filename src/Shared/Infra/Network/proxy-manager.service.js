@@ -26,8 +26,8 @@ export const PROXY_TYPES = {
  * @param {string} password - Optional password
  * @returns {number} Proxy ID
  */
-export function addProxy(type, host, port, username = "", password = "") {
-	return proxies.add(type, host, port, username, password);
+export async function addProxy(type, host, port, username = "", password = "") {
+	return await proxies.add(type, host, port, username, password);
 }
 
 /**
@@ -36,7 +36,7 @@ export function addProxy(type, host, port, username = "", password = "") {
  * @param {string} text - Multiline text with proxy definitions
  * @returns {{success: number, failed: number, errors: string[]}}
  */
-export function addProxiesFromText(text) {
+export async function addProxiesFromText(text) {
 	const lines = text
 		.split("\n")
 		.map((l) => l.trim())
@@ -47,7 +47,7 @@ export function addProxiesFromText(text) {
 		try {
 			const parsed = parseProxyString(line);
 			if (parsed) {
-				addProxy(
+				await addProxy(
 					parsed.type,
 					parsed.host,
 					parsed.port,
@@ -125,57 +125,57 @@ function parseProxyString(str) {
 /**
  * Get all proxies
  */
-export function getAllProxies() {
-	return proxies.getAll();
+export async function getAllProxies() {
+	return await proxies.getAll();
 }
 
 /**
  * Get active proxies only
  */
-export function getActiveProxies() {
-	return proxies.getActive();
+export async function getActiveProxies() {
+	return await proxies.getActive();
 }
 
 /**
  * Get proxy count
  */
-export function getProxyCount() {
-	return proxies.count();
+export async function getProxyCount() {
+	return await proxies.count();
 }
 
 /**
  * Get a random active proxy
  */
-export function getRandomProxy() {
-	return proxies.getRandom();
+export async function getRandomProxy() {
+	return await proxies.getRandom();
 }
 
 /**
  * Get proxy by ID
  */
-export function getProxyById(id) {
-	return proxies.getById(id);
+export async function getProxyById(id) {
+	return await proxies.getById(id);
 }
 
 /**
  * Toggle proxy active state
  */
-export function toggleProxy(id, isActive) {
-	proxies.toggle(id, isActive);
+export async function toggleProxy(id, isActive) {
+	await proxies.toggle(id, isActive);
 }
 
 /**
  * Delete proxy
  */
-export function deleteProxy(id) {
-	proxies.delete(id);
+export async function deleteProxy(id) {
+	await proxies.delete(id);
 }
 
 /**
  * Delete all proxies
  */
-export function deleteAllProxies() {
-	proxies.deleteAll();
+export async function deleteAllProxies() {
+	await proxies.deleteAll();
 }
 
 // ==================== PROXY TESTING ====================
@@ -223,7 +223,7 @@ export async function testProxy(proxy) {
  * Test all proxies and return results
  */
 export async function testAllProxies() {
-	const allProxies = getAllProxies();
+	const allProxies = await getAllProxies();
 	const results = [];
 
 	for (const proxy of allProxies) {
@@ -274,9 +274,9 @@ export function formatProxyForDisplay(proxy) {
 /**
  * Get proxy statistics
  */
-export function getProxyStats() {
-	const all = getAllProxies();
-	const active = getActiveProxies();
+export async function getProxyStats() {
+	const all = await getAllProxies();
+	const active = await getActiveProxies();
 
 	return {
 		total: all.length,

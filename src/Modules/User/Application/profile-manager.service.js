@@ -22,21 +22,21 @@ async function ensureProfileDir() {
 /**
  * Add a new profile manually
  */
-export function addProfile(
+export async function addProfile(
 	firstName,
 	lastName = "",
 	bio = "",
 	photoPath = "",
 	username = "",
 ) {
-	return profiles.add(firstName, lastName, bio, photoPath, username);
+	return await profiles.add(firstName, lastName, bio, photoPath, username);
 }
 
 /**
  * Add profiles from text (bulk import)
  * Format: firstName|lastName|bio (one per line)
  */
-export function addProfilesFromText(text) {
+export async function addProfilesFromText(text) {
 	const lines = text
 		.split("\n")
 		.map((l) => l.trim())
@@ -56,7 +56,7 @@ export function addProfilesFromText(text) {
 				continue;
 			}
 
-			addProfile(firstName, lastName, bio);
+			await addProfile(firstName, lastName, bio);
 			result.success++;
 		} catch (error) {
 			result.failed++;
@@ -70,57 +70,57 @@ export function addProfilesFromText(text) {
 /**
  * Get all profiles
  */
-export function getAllProfiles() {
-	return profiles.getAll();
+export async function getAllProfiles() {
+	return await profiles.getAll();
 }
 
 /**
  * Get a random unused profile
  */
-export function getRandomProfile() {
-	return profiles.getRandom();
+export async function getRandomProfile() {
+	return await profiles.getRandom();
 }
 
 /**
  * Get profile by ID
  */
-export function getProfileById(id) {
-	return profiles.getById(id);
+export async function getProfileById(id) {
+	return await profiles.getById(id);
 }
 
 /**
  * Mark profile as used
  */
-export function markProfileAsUsed(id) {
-	profiles.markAsUsed(id);
+export async function markProfileAsUsed(id) {
+	await profiles.markAsUsed(id);
 }
 
 /**
  * Delete profile
  */
-export function deleteProfile(id) {
-	profiles.delete(id);
+export async function deleteProfile(id) {
+	await profiles.delete(id);
 }
 
 /**
  * Delete all profiles
  */
-export function deleteAllProfiles() {
-	profiles.deleteAll();
+export async function deleteAllProfiles() {
+	await profiles.deleteAll();
 }
 
 /**
  * Get profile count
  */
-export function getProfileCount() {
-	return profiles.count();
+export async function getProfileCount() {
+	return await profiles.count();
 }
 
 /**
  * Get unused profile count
  */
-export function getUnusedProfileCount() {
-	return profiles.countUnused();
+export async function getUnusedProfileCount() {
+	return await profiles.countUnused();
 }
 
 // ==================== PROFILE EXTRACTION ====================
@@ -165,7 +165,7 @@ export async function extractProfileFromAccount(phone) {
 		}
 
 		// Save to database
-		const profileId = addProfile(
+		const profileId = await addProfile(
 			me.firstName || "",
 			me.lastName || "",
 			me.about || "",
@@ -218,7 +218,7 @@ export async function extractProfilesFromAllAccounts() {
  */
 export async function applyProfileToAccount(phone, profileId) {
 	try {
-		const profile = getProfileById(profileId);
+		const profile = await getProfileById(profileId);
 		if (!profile) {
 			return { success: false, error: "پروفایل یافت نشد" };
 		}
@@ -257,7 +257,7 @@ export async function applyProfileToAccount(phone, profileId) {
 		}
 
 		// Mark profile as used
-		markProfileAsUsed(profileId);
+		await markProfileAsUsed(profileId);
 
 		return { success: true };
 	} catch (error) {
@@ -269,12 +269,12 @@ export async function applyProfileToAccount(phone, profileId) {
  * Apply random profile to account
  */
 export async function applyRandomProfileToAccount(phone) {
-	const profile = getRandomProfile();
+	const profile = await getRandomProfile();
 	if (!profile) {
 		return { success: false, error: "هیچ پروفایل استفاده نشده‌ای وجود ندارد" };
 	}
 
-	return applyProfileToAccount(phone, profile.id);
+	return await applyProfileToAccount(phone, profile.id);
 }
 
 /**
@@ -304,11 +304,13 @@ export async function applyRandomProfilesToAllAccounts() {
 /**
  * Get profile statistics
  */
-export function getProfileStats() {
+export async function getProfileStats() {
+    const total = await getProfileCount();
+    const unused = await getUnusedProfileCount();
 	return {
-		total: getProfileCount(),
-		unused: getUnusedProfileCount(),
-		used: getProfileCount() - getUnusedProfileCount(),
+		total,
+		unused,
+		used: total - unused,
 	};
 }
 

@@ -94,7 +94,8 @@ function registerAccountRoutes(bot, isAdmin) {
 		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery("❌ Access denied");
 		await ctx.answerCbQuery();
 		const accounts = accountManager.getAccountList();
-		await ctx.editMessageText(UI.getAccountsMessage(accounts), {
+		const stats = await accountStatus.getStats();
+		await ctx.editMessageText(UI.getAccountsMessage(accounts, stats), {
 			parse_mode: "Markdown",
 			...UI.getAccountsKeyboard(),
 		});
@@ -115,8 +116,9 @@ function registerAccountRoutes(bot, isAdmin) {
 		let msg = `📋 *لیست اکانت‌ها (${accounts.length})*\n📑 صفحه ${page} از ${totalPages || 1}\n\n`;
 		if (accounts.length === 0) msg += "_هیچ اکانتی متصل نیست._\n";
 		else {
-			pageItems.forEach((acc, i) => {
-				const status = accountStatus.get(acc.phone) || {};
+			for (let i = 0; i < pageItems.length; i++) {
+				const acc = pageItems[i];
+				const status = (await accountStatus.get(acc.phone)) || {};
 				const icon = status.is_reported
 					? "🔴"
 					: status.is_resting
@@ -124,7 +126,7 @@ function registerAccountRoutes(bot, isAdmin) {
 						: "🟢";
 				const role = acc.role === "scanner" ? "🔍" : "👤";
 				msg += `${startIdx + i + 1}. ${icon} \`${acc.phone}\`\n   ${role} ${acc.username || "No Username"}\n`;
-			});
+			}
 		}
 
 		const keyboard = [];
@@ -159,9 +161,9 @@ function registerAccountRoutes(bot, isAdmin) {
 	bot.action("panel_account_status", async (ctx) => {
 		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery("❌ Access denied");
 		await ctx.answerCbQuery();
-		const stats = accountStatus.getStats() || {};
-		const reported = accountStatus.getReported() || [];
-		const resting = accountStatus.getResting() || [];
+		const stats = (await accountStatus.getStats()) || {};
+		const reported = (await accountStatus.getReported()) || [];
+		const resting = (await accountStatus.getResting()) || [];
 
 		let msg = `📊 *وضعیت اکانت‌ها*\n\n• کل: \`${stats.total || 0}\`\n• 🟢 سالم: \`${stats.healthy || 0}\`\n• 🟡 در استراحت: \`${stats.resting || 0}\`\n• 🔴 ریپورت شده: \`${stats.reported || 0}\`\n\n`;
 
@@ -196,7 +198,7 @@ function registerAccountRoutes(bot, isAdmin) {
 
 	bot.action("clear_all_rest", async (ctx) => {
 		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery();
-		accountStatus.clearAllRest();
+		await accountStatus.clearAllRest();
 		await ctx.answerCbQuery("✅ استراحت همه اکانت‌ها پاک شد");
 		return ctx.editMessageText("✅ لیست استراحت با موفقیت پاک شد.", {
 			reply_markup: {
@@ -232,7 +234,8 @@ function registerAdderRoutes(bot, isAdmin) {
 	bot.action("panel_adder", async (ctx) => {
 		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery("❌ Access denied");
 		await ctx.answerCbQuery();
-		await ctx.editMessageText(UI.getAdderManagementMessage(), {
+		const orderStats = await orders.getStats();
+		await ctx.editMessageText(UI.getAdderManagementMessage(orderStats), {
 			parse_mode: "Markdown",
 			...UI.getAdderManagementKeyboard(),
 		});
@@ -267,7 +270,9 @@ function registerAdderRoutes(bot, isAdmin) {
 	bot.action("panel_settings", async (ctx) => {
 		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery();
 		await ctx.answerCbQuery();
-		await ctx.editMessageText(UI.getSettingsMessage(), {
+		const proxyCount = await proxies.count();
+		const restTime = await settings.get("rest_time", 30);
+		await ctx.editMessageText(UI.getSettingsMessage(proxyCount, restTime), {
 			parse_mode: "Markdown",
 			...UI.getSettingsKeyboard(),
 		});
@@ -280,7 +285,8 @@ function registerFakePanelRoutes(bot, isAdmin) {
 	bot.action("panel_fake", async (ctx) => {
 		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery();
 		await ctx.answerCbQuery();
-		await ctx.editMessageText(UI.getFakePanelMessage(), {
+		const orderStats = await orders.getStats();
+		await ctx.editMessageText(UI.getFakePanelMessage(orderStats), {
 			parse_mode: "Markdown",
 			...UI.getFakePanelKeyboard(),
 		});

@@ -1,12 +1,7 @@
 import os from "node:os";
 import { Markup } from "telegraf";
-import {
-	accountStatus,
-	orders,
-	proxies,
-	settings,
-} from "../../../database/panelDatabase.js";
-import { stripPremiumTags, formatButtonMarkup } from "../../../Shared/Infra/Telegram/telegram.formatter.js";
+// Note: Direct database imports removed from UI to favor data passing
+import { formatButtonMarkup } from "../../../Shared/Infra/Telegram/telegram.formatter.js";
 
 // ==================== MAIN PANEL ====================
 
@@ -93,15 +88,7 @@ export function getAccountsKeyboard() {
 	]);
 }
 
-export function getAccountsMessage(accounts) {
-	let stats = { healthy: 0, resting: 0, reported: 0 };
-	try {
-		const dbStats = accountStatus.getStats();
-		if (dbStats) stats = dbStats;
-	} catch (e) {
-		console.error("Error fetching account stats:", e);
-	}
-
+export function getAccountsMessage(accounts, stats = { healthy: 0, resting: 0, reported: 0 }) {
 	return `📱 *مدیریت اکانت*\n\n📊 *آمار کلی:*\n• تعداد کل: \`${accounts.length}\`\n• سالم: \`${stats.healthy || 0}\`\n• در استراحت: \`${stats.resting || 0}\`\n• ریپورت شده: \`${stats.reported || 0}\`\n\nاز منوی زیر گزینه مورد نظر را انتخاب کنید:`.trim();
 }
 
@@ -122,8 +109,7 @@ export function getFakePanelKeyboard() {
 	]);
 }
 
-export function getFakePanelMessage() {
-	const orderStats = orders.getStats();
+export function getFakePanelMessage(orderStats = { total: 0, completed: 0, running: 0 }) {
 	return `🌐 *پنل فیک*\n\nبخش مورد نظر را انتخاب کنید:\n\n👥 *ممبر* - افزودن ممبر اجباری به گروه/کانال\n👁️ *سین* - افزایش بازدید پست\n👍 *ری اکشن* - افزودن واکنش به پست\n💬 *کامنت* - ارسال کامنت به پست\n🤖 *استارت ربات* - استارت دادن ربات‌ها\n\n━━━━━━━━━━━━━━━━\n📊 *آمار سفارشات:*\n• کل: ${orderStats.total || 0}\n• تکمیل شده: ${orderStats.completed || 0}\n• در حال اجرا: ${orderStats.running || 0}`.trim();
 }
 
@@ -166,8 +152,7 @@ export function getAdderManagementKeyboard() {
 	]);
 }
 
-export function getAdderManagementMessage() {
-	const orderStats = orders.getStats();
+export function getAdderManagementMessage(orderStats = { total: 0, completed: 0, running: 0, failed: 0 }) {
 	return `📦 *مدیریت ادر*\n\n📊 *آمار سفارشات:*\n• کل سفارشات: \`${orderStats.total || 0}\`\n• تکمیل شده: \`${orderStats.completed || 0}\`\n• در حال اجرا: \`${orderStats.running || 0}\`\n• ناموفق: \`${orderStats.failed || 0}\`\n\nاز منوی زیر گزینه مورد نظر را انتخاب کنید:`.trim();
 }
 
@@ -201,9 +186,7 @@ export function getSettingsKeyboard() {
 	]);
 }
 
-export function getSettingsMessage() {
-	const proxyCount = proxies.count();
-	const restTime = settings.get("rest_time", 30);
+export function getSettingsMessage(proxyCount = 0, restTime = 30) {
 	return `⚙️ *تنظیمات ادر*\n\n📊 *وضعیت فعلی:*\n• تعداد پروکسی فعال: \`${proxyCount}\`\n• زمان استراحت: \`${restTime} دقیقه\`\n\nاز منوی زیر گزینه مورد نظر را انتخاب کنید:`.trim();
 }
 
@@ -306,12 +289,11 @@ export function getCMSMessage() {
 Edit any bot response dynamically. Use markers like \`{FIRSTNAME}\` or \`{HOUR}\` as placeholders.
 
 *Support:* HTML Tags & Premium Emojis \`[id]\` are fully supported in **Messages**. 
-⚠️ *Note:* Telegram Buttons only support plain text; Premium Emojis in buttons will be shown as \`✨\`.`;
+*Note:* Telegram Buttons only support plain text; Premium Emojis in buttons will be shown as \`✨\`.`;
 }
 
 export function getCMSKeyboard(templates) {
 	const templateKeys = Object.keys(templates);
-	console.log(`[CMS] Rendering keyboard with ${templateKeys.length} keys:`, templateKeys);
 	const keyboard = [];
 
 	// Group templates into rows

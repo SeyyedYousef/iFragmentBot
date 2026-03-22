@@ -103,12 +103,12 @@ async function runGhostCycle() {
 /**
  * Start Ghost Mode
  */
-export function startGhostMode(intervalMinutes = 15) {
+export async function startGhostMode(intervalMinutes = 15) {
 	if (ghostInterval) clearInterval(ghostInterval);
 
 	isRunning = true;
-	settings.set("ghost_mode_enabled", true);
-	settings.set("ghost_mode_interval", intervalMinutes);
+	await settings.set("ghost_mode_enabled", true);
+	await settings.set("ghost_mode_interval", intervalMinutes);
 
 	console.log(`👻 Ghost Mode started (Interval: ${intervalMinutes}m)`);
 
@@ -126,32 +126,32 @@ export function startGhostMode(intervalMinutes = 15) {
 /**
  * Stop Ghost Mode
  */
-export function stopGhostMode() {
+export async function stopGhostMode() {
 	if (ghostInterval) clearInterval(ghostInterval);
 	ghostInterval = null;
 	isRunning = false;
-	settings.set("ghost_mode_enabled", false);
+	await settings.set("ghost_mode_enabled", false);
 	console.log("👻 Ghost Mode stopped");
 }
 
 /**
  * Initialize
  */
-export function init() {
-	const enabled = settings.get("ghost_mode_enabled", false);
+export async function init() {
+	const enabled = await settings.get("ghost_mode_enabled", false);
 	if (enabled) {
-		const interval = settings.get("ghost_mode_interval", 15);
-		startGhostMode(interval);
+		const interval = await settings.get("ghost_mode_interval", 15);
+		await startGhostMode(interval);
 	}
 }
 
 /**
  * Get Status
  */
-export function getStatus() {
+export async function getStatus() {
 	return {
 		isEnabled: isRunning,
-		interval: settings.get("ghost_mode_interval", 15),
+		interval: await settings.get("ghost_mode_interval", 15),
 	};
 }
 

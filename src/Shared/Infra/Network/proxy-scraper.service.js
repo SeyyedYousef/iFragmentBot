@@ -140,16 +140,15 @@ export async function scrapeProxies() {
 
 		// 4. Save to Database
 		let added = 0;
+        const currentProxies = await proxyManager.getAllProxies();
 		for (const p of validProxies) {
 			// Check if already exists in DB
-			const exists = proxyManager
-				.getAllProxies()
-				.some(
+			const exists = currentProxies.some(
 					(existing) => existing.host === p.host && existing.port === p.port,
 				);
 
 			if (!exists) {
-				proxyManager.addProxy(p.type, p.host, p.port);
+				await proxyManager.addProxy(p.type, p.host, p.port);
 				added++;
 			}
 		}
@@ -175,11 +174,11 @@ export async function scrapeProxies() {
 /**
  * Start Auto-Scraper
  */
-export function startAutoScraper(intervalMinutes = 60) {
+export async function startAutoScraper(intervalMinutes = 60) {
 	if (autoScrapeInterval) clearInterval(autoScrapeInterval);
 
-	settings.set("auto_scrape_enabled", true);
-	settings.set("auto_scrape_interval", intervalMinutes);
+	await settings.set("auto_scrape_enabled", true);
+	await settings.set("auto_scrape_interval", intervalMinutes);
 
 	console.log(`☁️ Auto-Scraper started (Interval: ${intervalMinutes}m)`);
 
@@ -198,21 +197,21 @@ export function startAutoScraper(intervalMinutes = 60) {
 /**
  * Stop Auto-Scraper
  */
-export function stopAutoScraper() {
+export async function stopAutoScraper() {
 	if (autoScrapeInterval) clearInterval(autoScrapeInterval);
 	autoScrapeInterval = null;
-	settings.set("auto_scrape_enabled", false);
+	await settings.set("auto_scrape_enabled", false);
 	console.log("☁️ Auto-Scraper stopped");
 }
 
 /**
  * Initialize (Check saved settings)
  */
-export function init() {
-	const enabled = settings.get("auto_scrape_enabled", false);
+export async function init() {
+	const enabled = await settings.get("auto_scrape_enabled", false);
 	if (enabled) {
-		const interval = settings.get("auto_scrape_interval", 60);
-		startAutoScraper(interval);
+		const interval = await settings.get("auto_scrape_interval", 60);
+		await startAutoScraper(interval);
 	}
 }
 

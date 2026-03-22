@@ -11,9 +11,9 @@ import * as accountManager from "../../User/Application/account-manager.service.
 /**
  * Get account status
  */
-export function getAccountStatus(phone) {
+export async function getAccountStatus(phone) {
 	return (
-		accountStatus.get(phone) || {
+		await accountStatus.get(phone) || {
 			phone,
 			is_reported: false,
 			is_resting: false,
@@ -26,37 +26,37 @@ export function getAccountStatus(phone) {
 /**
  * Mark account as reported
  */
-export function markAsReported(phone) {
-	accountStatus.markReported(phone);
+export async function markAsReported(phone) {
+	await accountStatus.markReported(phone);
 }
 
 /**
  * Mark account as resting
  */
-export function markAsResting(phone, minutes = null) {
-	const restTime = minutes || settings.get("rest_time", 30);
-	accountStatus.markResting(phone, restTime);
+export async function markAsResting(phone, minutes = null) {
+	const restTime = minutes || await settings.get("rest_time", 30);
+	await accountStatus.markResting(phone, restTime);
 }
 
 /**
  * Clear rest status for an account
  */
-export function clearRest(phone) {
-	accountStatus.clearRest(phone);
+export async function clearRest(phone) {
+	await accountStatus.clearRest(phone);
 }
 
 /**
  * Clear rest for all accounts
  */
-export function clearAllRest() {
-	accountStatus.clearAllRest();
+export async function clearAllRest() {
+	await accountStatus.clearAllRest();
 }
 
 /**
  * Delete account status
  */
-export function deleteAccountStatus(phone) {
-	accountStatus.delete(phone);
+export async function deleteAccountStatus(phone) {
+	await accountStatus.delete(phone);
 }
 
 // ==================== QUERIES ====================
@@ -64,36 +64,36 @@ export function deleteAccountStatus(phone) {
 /**
  * Get all reported accounts
  */
-export function getReportedAccounts() {
-	return accountStatus.getReported();
+export async function getReportedAccounts() {
+	return await accountStatus.getReported();
 }
 
 /**
  * Get all resting accounts
  */
-export function getRestingAccounts() {
-	return accountStatus.getResting();
+export async function getRestingAccounts() {
+	return await accountStatus.getResting();
 }
 
 /**
  * Get all healthy accounts
  */
-export function getHealthyAccounts() {
-	return accountStatus.getHealthy();
+export async function getHealthyAccounts() {
+	return await accountStatus.getHealthy();
 }
 
 /**
  * Get all account statuses
  */
-export function getAllAccountStatuses() {
-	return accountStatus.getAll();
+export async function getAllAccountStatuses() {
+	return await accountStatus.getAll();
 }
 
 /**
  * Get statistics
  */
-export function getStats() {
-	return accountStatus.getStats();
+export async function getStats() {
+	return await accountStatus.getStats();
 }
 
 // ==================== HEALTH CHECK ====================
@@ -101,8 +101,8 @@ export function getStats() {
 /**
  * Check if an account is healthy (not reported, not resting)
  */
-export function isAccountHealthy(phone) {
-	const status = getAccountStatus(phone);
+export async function isAccountHealthy(phone) {
+	const status = await getAccountStatus(phone);
 
 	if (status.is_reported) return false;
 
@@ -112,7 +112,7 @@ export function isAccountHealthy(phone) {
 			return false;
 		}
 		// Rest time passed, clear it
-		clearRest(phone);
+		await clearRest(phone);
 	}
 
 	return true;
@@ -121,12 +121,12 @@ export function isAccountHealthy(phone) {
 /**
  * Get next available account (healthy and not resting)
  */
-export function getNextAvailableAccount() {
+export async function getNextAvailableAccount() {
 	const accounts = accountManager.getAccountList();
 
 	for (const account of accounts) {
 		if (account.status !== "active") continue;
-		if (isAccountHealthy(account.phone)) {
+		if (await isAccountHealthy(account.phone)) {
 			return account;
 		}
 	}
@@ -137,11 +137,15 @@ export function getNextAvailableAccount() {
 /**
  * Get all available accounts
  */
-export function getAvailableAccounts() {
+export async function getAvailableAccounts() {
 	const accounts = accountManager.getAccountList();
-	return accounts.filter(
-		(acc) => acc.status === "active" && isAccountHealthy(acc.phone),
-	);
+    const results = [];
+    for (const acc of accounts) {
+        if (acc.status === "active" && (await isAccountHealthy(acc.phone))) {
+            results.push(acc);
+        }
+    }
+	return results;
 }
 
 // ==================== AUTOMATIC DETECTION ====================
@@ -149,7 +153,7 @@ export function getAvailableAccounts() {
 /**
  * Detect and mark reported accounts based on error
  */
-export function detectAndMarkReported(phone, error) {
+export async function detectAndMarkReported(phone, error) {
 	const message = error.message?.toLowerCase() || "";
 
 	const reportPatterns = [
@@ -165,7 +169,7 @@ export function detectAndMarkReported(phone, error) {
 	const isReported = reportPatterns.some((p) => message.includes(p));
 
 	if (isReported) {
-		markAsReported(phone);
+		await markAsReported(phone);
 		return true;
 	}
 
@@ -175,7 +179,7 @@ export function detectAndMarkReported(phone, error) {
 	const needsRest = restPatterns.some((p) => message.includes(p));
 
 	if (needsRest) {
-		markAsResting(phone);
+		await markAsResting(phone);
 		return true;
 	}
 
@@ -188,13 +192,14 @@ export function detectAndMarkReported(phone, error) {
  * Remove all reported accounts from the system
  */
 export async function removeReportedAccounts() {
-	const reported = getReportedAccounts();
+	const reported = await getReportedAccounts();
 	const results = { removed: 0, failed: 0 };
 
 	for (const acc of reported) {
 		try {
+			// Note: ensure removeAccount expects to be awaited in its actual usage layer
 			await accountManager.removeAccount(acc.phone);
-			deleteAccountStatus(acc.phone);
+			await deleteAccountStatus(acc.phone);
 			results.removed++;
 		} catch (_error) {
 			results.failed++;
@@ -207,8 +212,8 @@ export async function removeReportedAccounts() {
 /**
  * Check and clear expired rest times
  */
-export function clearExpiredRests() {
-	const resting = getRestingAccounts();
+export async function clearExpiredRests() {
+	const resting = await getRestingAccounts();
 	const now = new Date();
 	let cleared = 0;
 
@@ -216,7 +221,7 @@ export function clearExpiredRests() {
 		if (acc.rest_until) {
 			const restUntil = new Date(acc.rest_until);
 			if (restUntil <= now) {
-				clearRest(acc.phone);
+				await clearRest(acc.phone);
 				cleared++;
 			}
 		}
@@ -230,24 +235,24 @@ export function clearExpiredRests() {
 /**
  * Set account folder
  */
-export function setAccountFolder(phone, folder) {
-	const current = getAccountStatus(phone);
-	accountStatus.set(phone, { ...current, folder });
+export async function setAccountFolder(phone, folder) {
+	const current = await getAccountStatus(phone);
+	await accountStatus.set(phone, { ...current, folder });
 }
 
 /**
  * Get accounts by folder
  */
-export function getAccountsByFolder(folder) {
-	const all = getAllAccountStatuses();
+export async function getAccountsByFolder(folder) {
+	const all = await getAllAccountStatuses();
 	return all.filter((acc) => acc.folder === folder);
 }
 
 /**
  * Get available folders
  */
-export function getFolders() {
-	const all = getAllAccountStatuses();
+export async function getFolders() {
+	const all = await getAllAccountStatuses();
 	const folders = new Set(all.map((acc) => acc.folder || "default"));
 	return Array.from(folders);
 }
@@ -257,11 +262,11 @@ export function getFolders() {
 /**
  * Generate a detailed status report
  */
-export function generateStatusReport() {
-	const stats = getStats();
-	const reported = getReportedAccounts();
-	const resting = getRestingAccounts();
-	const _healthy = getHealthyAccounts();
+export async function generateStatusReport() {
+	const stats = await getStats();
+	const reported = await getReportedAccounts();
+	const resting = await getRestingAccounts();
+	const _healthy = await getHealthyAccounts();
 
 	let report = `📊 *گزارش وضعیت اکانت‌ها*\n\n`;
 	report += `📈 *آمار کلی:*\n`;

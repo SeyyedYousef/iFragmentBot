@@ -23,9 +23,8 @@ import {
 
 // Configuration
 const SESSIONS_FILE = path.resolve("data/sessions.json");
-const _API_ID =
-	parseInt(process.env.TELEGRAM_API_ID, 10) || settings.get("api_id", 0);
-const _API_HASH = process.env.TELEGRAM_API_HASH || settings.get("api_hash", "");
+const _API_ID = parseInt(process.env.TELEGRAM_API_ID, 10);
+const _API_HASH = process.env.TELEGRAM_API_HASH;
 
 // State
 let accounts = []; // Array of Account objects
@@ -116,12 +115,12 @@ export async function loadAccounts() {
 		// 1. Check if we need to migrate from SQLite to MongoDB
 		const mongoCount = await countFromMongo();
 		if (mongoCount === 0) {
-			const sqliteCount = dbAccounts.count();
+			const sqliteCount = await dbAccounts.count();
 			if (sqliteCount > 0) {
 				console.log(
 					`🔄 Found ${sqliteCount} accounts in SQLite but 0 in MongoDB. Starting migration...`,
 				);
-				const sqliteAccounts = dbAccounts.getAll();
+				const sqliteAccounts = await dbAccounts.getAll();
 				const { saveAccount: saveToMongo } = await import(
 					"../../../Shared/Infra/Database/mongo.repository.js"
 				);
@@ -243,10 +242,10 @@ export async function saveAccounts(immediate = false) {
 /**
  * Get API credentials (from env or settings)
  */
-function getApiCredentials() {
+async function getApiCredentials() {
 	const apiId =
-		parseInt(process.env.TELEGRAM_API_ID, 10) || settings.get("api_id", 0);
-	const apiHash = process.env.TELEGRAM_API_HASH || settings.get("api_hash", "");
+		parseInt(process.env.TELEGRAM_API_ID, 10) || await settings.get("api_id", 0);
+	const apiHash = process.env.TELEGRAM_API_HASH || await settings.get("api_hash", "");
 	return { apiId, apiHash };
 }
 
@@ -254,7 +253,7 @@ function getApiCredentials() {
  * Initialize all accounts (connect clients)
  */
 export async function initAccounts() {
-	const { apiId, apiHash } = getApiCredentials();
+	const { apiId, apiHash } = await getApiCredentials();
 
 	if (!apiId || !apiHash) {
 		console.warn(
@@ -348,7 +347,7 @@ async function checkIdleClients() {
  * Connect a specific account
  */
 async function connectClient(account) {
-	const { apiId, apiHash } = getApiCredentials();
+	const { apiId, apiHash } = await getApiCredentials();
 
 	if (!apiId || !apiHash) {
 		account.status = "error";
@@ -431,7 +430,7 @@ async function connectClient(account) {
  * Add a new account by session string
  */
 export async function addAccountBySession(sessionString) {
-	const { apiId, apiHash } = getApiCredentials();
+	const { apiId, apiHash } = await getApiCredentials();
 
 	if (!apiId || !apiHash) {
 		throw new Error("API credentials not configured");
@@ -737,7 +736,7 @@ export async function executeWithSmartRetry(
 				if (phone) {
 					// Mark account as resting
 					// Add buffer +1 minute
-					accountStatus.markResting(phone, Math.ceil(waitSeconds / 60) + 1);
+					await accountStatus.markResting(phone, Math.ceil(waitSeconds / 60) + 1);
 
 					// Disconnect to be safe
 					try {
@@ -757,7 +756,7 @@ export async function executeWithSmartRetry(
 				errorMsg.includes("USER_DEACTIVATED")
 			) {
 				if (phone) {
-					accountStatus.markReported(phone);
+					await accountStatus.markReported(phone);
 					try {
 						await client.disconnect();
 					} catch {}

@@ -11,38 +11,37 @@ import * as accountManager from "../../User/Application/account-manager.service.
 /**
  * Add a received account
  */
-export function addReceivedAccount(phone, sessionString, donatedBy) {
-	return receiver.add(phone, sessionString, donatedBy);
+export async function addReceivedAccount(phone, sessionString, donatedBy) {
+	return await receiver.add(phone, sessionString, donatedBy);
 }
 
 /**
  * Get all received accounts
  */
-export function getAllReceivedAccounts() {
-	return receiver.getAll();
+export async function getAllReceivedAccounts() {
+	return await receiver.getAll();
 }
 
 /**
  * Get pending (not approved) accounts
  */
-export function getPendingAccounts() {
-	return receiver.getPending();
+export async function getPendingAccounts() {
+	return await receiver.getPending();
 }
 
 /**
  * Get approved accounts
  */
-export function getApprovedAccounts() {
-	return receiver.getApproved();
+export async function getApprovedAccounts() {
+	return await receiver.getApproved();
 }
 
 /**
  * Approve a received account
  */
 export async function approveAccount(id) {
-	const account = receiver.getByPhone
-		? null
-		: receiver.getAll().find((a) => a.id === id);
+	const all = await receiver.getAll();
+	const account = all.find((a) => a.id === id);
 
 	if (!account) {
 		return { success: false, error: "اکانت یافت نشد" };
@@ -55,7 +54,7 @@ export async function approveAccount(id) {
 		}
 
 		// Mark as approved
-		receiver.approve(id);
+		await receiver.approve(id);
 
 		return { success: true };
 	} catch (error) {
@@ -66,15 +65,16 @@ export async function approveAccount(id) {
 /**
  * Reject (delete) a received account
  */
-export function rejectAccount(id) {
-	receiver.delete(id);
+export async function rejectAccount(id) {
+	await receiver.delete(id);
 }
 
 /**
  * Check if phone already exists
  */
-export function phoneExists(phone) {
-	return receiver.getByPhone(phone) !== undefined;
+export async function phoneExists(phone) {
+	const result = await receiver.getByPhone(phone);
+	return result !== undefined && result !== null;
 }
 
 // ==================== STATISTICS ====================
@@ -82,10 +82,10 @@ export function phoneExists(phone) {
 /**
  * Get receiver statistics
  */
-export function getReceiverStats() {
-	const all = getAllReceivedAccounts();
-	const pending = getPendingAccounts();
-	const approved = getApprovedAccounts();
+export async function getReceiverStats() {
+	const all = await getAllReceivedAccounts();
+	const pending = await getPendingAccounts();
+	const approved = await getApprovedAccounts();
 
 	return {
 		total: all.length,
@@ -99,21 +99,21 @@ export function getReceiverStats() {
 /**
  * Export all received accounts as JSON
  */
-export function exportReceivedAccounts() {
-	const accounts = getAllReceivedAccounts();
+export async function exportReceivedAccounts() {
+	const accounts = await getAllReceivedAccounts();
 	return JSON.stringify(accounts, null, 2);
 }
 
 /**
  * Import received accounts from JSON
  */
-export function importReceivedAccounts(jsonString) {
+export async function importReceivedAccounts(jsonString) {
 	try {
 		const accounts = JSON.parse(jsonString);
 		const results = { success: 0, failed: 0 };
 
 		for (const account of accounts) {
-			const result = addReceivedAccount(
+			const result = await addReceivedAccount(
 				account.phone,
 				account.session_string,
 				account.donated_by,

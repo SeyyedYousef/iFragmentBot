@@ -34,7 +34,7 @@ export async function addMembersToGroup(
 	userIds,
 	progressCallback = null,
 ) {
-	const orderId = orders.create("member", targetChat, userIds.length);
+	const orderId = await orders.create("member", targetChat, userIds.length);
 	const result = { success: 0, failed: 0, errors: [] };
 
 	activeOperations.set(orderId, { status: "running", cancel: false });
@@ -43,7 +43,7 @@ export async function addMembersToGroup(
 		for (let i = 0; i < userIds.length; i++) {
 			// Check if cancelled
 			if (activeOperations.get(orderId)?.cancel) {
-				orders.cancel(orderId);
+		await orders.cancel(orderId);
 				break;
 			}
 
@@ -68,7 +68,7 @@ export async function addMembersToGroup(
 				result.success++;
 
 				// Update progress
-				orders.updateProgress(orderId, result.success);
+		await orders.updateProgress(orderId, result.success);
 				if (progressCallback) {
 					progressCallback({
 						current: i + 1,
@@ -83,10 +83,10 @@ export async function addMembersToGroup(
 
 				// Check for flood/spam errors
 				if (isFloodError(error)) {
-					accountStatus.markResting(account.phone, CONFIG.REST_TIME_MINUTES);
+			await accountStatus.markResting(account.phone, CONFIG.REST_TIME_MINUTES);
 				}
 				if (isReportError(error)) {
-					accountStatus.markReported(account.phone);
+			await accountStatus.markReported(account.phone);
 				}
 			}
 
@@ -94,9 +94,9 @@ export async function addMembersToGroup(
 			await sleep(CONFIG.MEMBER_DELAY_MS);
 		}
 
-		orders.complete(orderId);
+		await orders.complete(orderId);
 	} catch (error) {
-		orders.fail(orderId, error.message);
+		await orders.fail(orderId, error.message);
 		throw error;
 	} finally {
 		activeOperations.delete(orderId);
@@ -127,7 +127,7 @@ export async function massJoinChannel(
 	count,
 	progressCallback = null,
 ) {
-	const orderId = orders.create("join_channel", targetChat, count);
+	const orderId = await orders.create("join_channel", targetChat, count);
 	const result = { success: 0, failed: 0 };
 
 	activeOperations.set(orderId, { status: "running", cancel: false });
@@ -142,7 +142,7 @@ export async function massJoinChannel(
 
 		for (let i = 0; i < Math.min(accounts.length, count); i++) {
 			if (activeOperations.get(orderId)?.cancel) {
-				orders.cancel(orderId);
+		await orders.cancel(orderId);
 				break;
 			}
 
@@ -159,7 +159,7 @@ export async function massJoinChannel(
 				await joinChat(client, targetChat);
 				result.success++;
 
-				orders.updateProgress(orderId, result.success);
+		await orders.updateProgress(orderId, result.success);
 				if (progressCallback) {
 					progressCallback({
 						current: result.success,
@@ -171,16 +171,16 @@ export async function massJoinChannel(
 			} catch (error) {
 				result.failed++;
 				if (isFloodError(error)) {
-					accountStatus.markResting(account.phone, CONFIG.REST_TIME_MINUTES);
+			await accountStatus.markResting(account.phone, CONFIG.REST_TIME_MINUTES);
 				}
 			}
 
 			await sleep(CONFIG.MEMBER_DELAY_MS);
 		}
 
-		orders.complete(orderId);
+		await orders.complete(orderId);
 	} catch (error) {
-		orders.fail(orderId, error.message);
+		await orders.fail(orderId, error.message);
 		throw error;
 	} finally {
 		activeOperations.delete(orderId);
@@ -204,7 +204,7 @@ export async function addViews(
 	count,
 	progressCallback = null,
 ) {
-	const orderId = orders.create(
+	const orderId = await orders.create(
 		"view",
 		`${channelUsername}/${messageId}`,
 		count,
@@ -221,7 +221,7 @@ export async function addViews(
 
 		for (let i = 0; i < Math.min(accounts.length, count); i++) {
 			if (activeOperations.get(orderId)?.cancel) {
-				orders.cancel(orderId);
+		await orders.cancel(orderId);
 				break;
 			}
 
@@ -238,7 +238,7 @@ export async function addViews(
 				await viewMessage(client, channelUsername, messageId);
 				result.success++;
 
-				orders.updateProgress(orderId, result.success);
+		await orders.updateProgress(orderId, result.success);
 				if (progressCallback) {
 					progressCallback({
 						current: result.success,
@@ -250,16 +250,16 @@ export async function addViews(
 			} catch (error) {
 				result.failed++;
 				if (isFloodError(error)) {
-					accountStatus.markResting(account.phone, CONFIG.REST_TIME_MINUTES);
+			await accountStatus.markResting(account.phone, CONFIG.REST_TIME_MINUTES);
 				}
 			}
 
 			await sleep(CONFIG.VIEW_DELAY_MS);
 		}
 
-		orders.complete(orderId);
+		await orders.complete(orderId);
 	} catch (error) {
-		orders.fail(orderId, error.message);
+		await orders.fail(orderId, error.message);
 		throw error;
 	} finally {
 		activeOperations.delete(orderId);
@@ -285,7 +285,7 @@ export async function addReactions(
 	count,
 	progressCallback = null,
 ) {
-	const orderId = orders.create(
+	const orderId = await orders.create(
 		"reaction",
 		`${channelUsername}/${messageId}`,
 		count,
@@ -301,7 +301,7 @@ export async function addReactions(
 
 		for (let i = 0; i < Math.min(accounts.length, count); i++) {
 			if (activeOperations.get(orderId)?.cancel) {
-				orders.cancel(orderId);
+		await orders.cancel(orderId);
 				break;
 			}
 
@@ -318,7 +318,7 @@ export async function addReactions(
 				await sendReaction(client, channelUsername, messageId, emoji);
 				result.success++;
 
-				orders.updateProgress(orderId, result.success);
+		await orders.updateProgress(orderId, result.success);
 				if (progressCallback) {
 					progressCallback({
 						current: result.success,
@@ -330,16 +330,16 @@ export async function addReactions(
 			} catch (error) {
 				result.failed++;
 				if (isFloodError(error)) {
-					accountStatus.markResting(account.phone, CONFIG.REST_TIME_MINUTES);
+			await accountStatus.markResting(account.phone, CONFIG.REST_TIME_MINUTES);
 				}
 			}
 
 			await sleep(CONFIG.REACTION_DELAY_MS);
 		}
 
-		orders.complete(orderId);
+		await orders.complete(orderId);
 	} catch (error) {
-		orders.fail(orderId, error.message);
+		await orders.fail(orderId, error.message);
 		throw error;
 	} finally {
 		activeOperations.delete(orderId);
@@ -363,7 +363,7 @@ export async function addComments(
 	comments,
 	progressCallback = null,
 ) {
-	const orderId = orders.create(
+	const orderId = await orders.create(
 		"comment",
 		`${channelUsername}/${messageId}`,
 		comments.length,
@@ -379,7 +379,7 @@ export async function addComments(
 
 		for (let i = 0; i < comments.length; i++) {
 			if (activeOperations.get(orderId)?.cancel) {
-				orders.cancel(orderId);
+		await orders.cancel(orderId);
 				break;
 			}
 
@@ -397,7 +397,7 @@ export async function addComments(
 				await sendComment(client, channelUsername, messageId, comment);
 				result.success++;
 
-				orders.updateProgress(orderId, result.success);
+		await orders.updateProgress(orderId, result.success);
 				if (progressCallback) {
 					progressCallback({
 						current: result.success,
@@ -409,16 +409,16 @@ export async function addComments(
 			} catch (error) {
 				result.failed++;
 				if (isFloodError(error)) {
-					accountStatus.markResting(account.phone, CONFIG.REST_TIME_MINUTES);
+			await accountStatus.markResting(account.phone, CONFIG.REST_TIME_MINUTES);
 				}
 			}
 
 			await sleep(CONFIG.COMMENT_DELAY_MS);
 		}
 
-		orders.complete(orderId);
+		await orders.complete(orderId);
 	} catch (error) {
-		orders.fail(orderId, error.message);
+		await orders.fail(orderId, error.message);
 		throw error;
 	} finally {
 		activeOperations.delete(orderId);
@@ -436,7 +436,7 @@ export async function addComments(
  * @param {function} progressCallback - Progress callback
  */
 export async function startBot(botUsername, count, progressCallback = null) {
-	const orderId = orders.create("bot_start", botUsername, count);
+	const orderId = await orders.create("bot_start", botUsername, count);
 	const result = { success: 0, failed: 0 };
 
 	activeOperations.set(orderId, { status: "running", cancel: false });
@@ -448,7 +448,7 @@ export async function startBot(botUsername, count, progressCallback = null) {
 
 		for (let i = 0; i < Math.min(accounts.length, count); i++) {
 			if (activeOperations.get(orderId)?.cancel) {
-				orders.cancel(orderId);
+		await orders.cancel(orderId);
 				break;
 			}
 
@@ -465,7 +465,7 @@ export async function startBot(botUsername, count, progressCallback = null) {
 				await sendStartToBot(client, botUsername);
 				result.success++;
 
-				orders.updateProgress(orderId, result.success);
+		await orders.updateProgress(orderId, result.success);
 				if (progressCallback) {
 					progressCallback({
 						current: result.success,
@@ -481,9 +481,9 @@ export async function startBot(botUsername, count, progressCallback = null) {
 			await sleep(CONFIG.VIEW_DELAY_MS);
 		}
 
-		orders.complete(orderId);
+		await orders.complete(orderId);
 	} catch (error) {
-		orders.fail(orderId, error.message);
+		await orders.fail(orderId, error.message);
 		throw error;
 	} finally {
 		activeOperations.delete(orderId);
@@ -523,13 +523,13 @@ async function getNextAvailableAccount() {
 	for (const account of accounts) {
 		if (account.status !== "active") continue;
 
-		const status = accountStatus.get(account.phone);
+		const status = await accountStatus.get(account.phone);
 		if (status?.is_reported) continue;
 		if (status?.is_resting) {
 			const restUntil = new Date(status.rest_until);
 			if (restUntil > new Date()) continue;
 			// Rest time passed, clear it
-			accountStatus.clearRest(account.phone);
+			await accountStatus.clearRest(account.phone);
 		}
 
 		return account;

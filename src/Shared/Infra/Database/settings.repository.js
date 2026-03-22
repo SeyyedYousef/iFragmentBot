@@ -48,7 +48,7 @@ export async function getDashboardConfig() {
 	};
 
 	try {
-		const localConfig = localDB.get(DASHBOARD_CONFIG_DOC);
+		const localConfig = await localDB.get(DASHBOARD_CONFIG_DOC);
 		let data = localConfig || {};
 
 		if (db) {
@@ -86,7 +86,7 @@ export async function updateDashboardButton(buttonId, updates) {
 		config.buttons[buttonId] = { ...(config.buttons[buttonId] || {}), ...updates };
 
 		// 3. Save to Local
-		localDB.set(DASHBOARD_CONFIG_DOC, config);
+		await localDB.set(DASHBOARD_CONFIG_DOC, config);
 
 		// 4. Save to Cloud
 		if (db) {
@@ -116,7 +116,7 @@ export async function toggleGlobalFeature(featureKey) {
 		config.features[featureKey] = newState;
 		
 		// 2. Save Local
-		localDB.set(DASHBOARD_CONFIG_DOC, config);
+		await localDB.set(DASHBOARD_CONFIG_DOC, config);
 
 		// 3. Save Cloud
 		if (db) {
@@ -144,7 +144,7 @@ export async function updateTemplate(key, content) {
 		config.templates[key] = content;
 
 		// 2. Save Local
-		localDB.set(DASHBOARD_CONFIG_DOC, config);
+		await localDB.set(DASHBOARD_CONFIG_DOC, config);
 
 		// 3. Save Cloud
 		if (db) {
