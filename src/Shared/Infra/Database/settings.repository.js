@@ -52,9 +52,21 @@ export async function getDashboardConfig() {
 		let data = localConfig || {};
 
 		if (db) {
-			const doc = await db.collection(SETTINGS_COLLECTION).doc(DASHBOARD_CONFIG_DOC).get();
-			if (doc.exists) {
-				data = { ...data, ...doc.data() };
+			try {
+				const doc = await db.collection(SETTINGS_COLLECTION).doc(DASHBOARD_CONFIG_DOC).get();
+				if (doc.exists) {
+					const cloudData = doc.data();
+					// Merge strategy: MongoDB (data) keys OVERWRITE Firestore (cloudData) keys
+					data = {
+						...cloudData,
+						...data,
+						buttons: { ...(cloudData.buttons || {}), ...(data.buttons || {}) },
+						templates: { ...(cloudData.templates || {}), ...(data.templates || {}) },
+						features: { ...(cloudData.features || {}), ...(data.features || {}) },
+					};
+				}
+			} catch (e) {
+				console.warn("⚠️ Firestore fetch failed or timed out:", e.message);
 			}
 		}
 

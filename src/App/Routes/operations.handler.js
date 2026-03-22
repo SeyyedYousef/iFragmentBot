@@ -30,11 +30,16 @@ function registerProfileRoutes(bot, isAdmin) {
 	bot.action("ops_profile_system", async (ctx) => {
 		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery("❌ Access denied");
 		await ctx.answerCbQuery();
-		const stats = profileManager.getProfileStats();
-		await ctx.editMessageText(UI.getProfileSystemMessage(stats), {
-			parse_mode: "Markdown",
-			...UI.getProfileSystemKeyboard(),
-		});
+		try {
+			const stats = await profileManager.getProfileStats();
+			await ctx.editMessageText(UI.getProfileSystemMessage(stats), {
+				parse_mode: "Markdown",
+				...UI.getProfileSystemKeyboard(),
+			});
+		} catch (error) {
+			console.error("Ops Profile Error:", error);
+			await ctx.reply("❌ خطا در دریافت آمار پروفایل.");
+		}
 	});
 
 	// Add profile prompt
@@ -59,38 +64,44 @@ function registerProfileRoutes(bot, isAdmin) {
 	bot.action("ops_list_profiles", async (ctx) => {
 		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery();
 		await ctx.answerCbQuery();
-		const profiles = profileManager.getAllProfiles();
-		if (profiles.length === 0)
-			return ctx.editMessageText("❌ هیچ پروفایلی ثبت نشده.", {
+		try {
+			const profiles = await profileManager.getAllProfiles();
+			if (profiles.length === 0) {
+				return ctx.editMessageText("❌ هیچ پروفایلی ثبت نشده.", {
+					reply_markup: {
+						inline_keyboard: [
+							[{ text: "➕ افزودن", callback_data: "ops_add_profile" }],
+							[{ text: "🔙 بازگشت", callback_data: "ops_profile_system" }],
+						],
+					},
+				});
+			}
+
+			let msg =
+				`📋 *لیست پروفایل‌ها*\n\n` +
+				profiles
+					.slice(0, 15)
+					.map(
+						(p, i) =>
+							`${i + 1}. ${p.is_used ? "✅" : "⬜"} ${p.first_name} ${p.last_name || ""}`,
+					)
+					.join("\n");
+			if (profiles.length > 15)
+				msg += `\n_و ${profiles.length - 15} مورد دیگر..._`;
+
+			await ctx.editMessageText(msg, {
+				parse_mode: "Markdown",
 				reply_markup: {
 					inline_keyboard: [
-						[{ text: "➕ افزودن", callback_data: "ops_add_profile" }],
+						[{ text: "🗑️ حذف همه", callback_data: "ops_delete_all_profiles" }],
 						[{ text: "🔙 بازگشت", callback_data: "ops_profile_system" }],
 					],
 				},
 			});
-
-		let msg =
-			`📋 *لیست پروفایل‌ها*\n\n` +
-			profiles
-				.slice(0, 15)
-				.map(
-					(p, i) =>
-						`${i + 1}. ${p.is_used ? "✅" : "⬜"} ${p.first_name} ${p.last_name || ""}`,
-				)
-				.join("\n");
-		if (profiles.length > 15)
-			msg += `\n_و ${profiles.length - 15} مورد دیگر..._`;
-
-		await ctx.editMessageText(msg, {
-			parse_mode: "Markdown",
-			reply_markup: {
-				inline_keyboard: [
-					[{ text: "🗑️ حذف همه", callback_data: "ops_delete_all_profiles" }],
-					[{ text: "🔙 بازگشت", callback_data: "ops_profile_system" }],
-				],
-			},
-		});
+		} catch (error) {
+			console.error("Ops List Profiles Error:", error);
+			await ctx.reply("❌ خطا در دریافت لیست پروفایل‌ها.");
+		}
 	});
 
 	// Apply profiles
@@ -117,36 +128,47 @@ function registerReceiverRoutes(bot, isAdmin) {
 	bot.action("ops_receiver_system", async (ctx) => {
 		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery();
 		await ctx.answerCbQuery();
-		const stats = receiverService.getReceiverStats();
-		await ctx.editMessageText(UI.getReceiverSystemMessage(stats), {
-			parse_mode: "Markdown",
-			...UI.getReceiverSystemKeyboard(),
-		});
+		try {
+			const stats = await receiverService.getReceiverStats();
+			await ctx.editMessageText(UI.getReceiverSystemMessage(stats), {
+				parse_mode: "Markdown",
+				...UI.getReceiverSystemKeyboard(),
+			});
+		} catch (error) {
+			console.error("Ops Receiver Error:", error);
+			await ctx.reply("❌ خطا در دریافت وضعیت دریافت‌ر.");
+		}
 	});
 
 	bot.action("receiver_pending", async (ctx) => {
 		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery();
 		await ctx.answerCbQuery();
-		const pending = receiverService.getPendingAccounts();
-		if (pending.length === 0)
-			return ctx.editMessageText("✅ هیچ درخواستی در انتظار تأیید نیست.", {
-				reply_markup: {
-					inline_keyboard: [
-						[{ text: "🔙 Back", callback_data: "ops_receiver_system" }],
-					],
-				},
-			});
+		try {
+			const pending = await receiverService.getPendingAccounts();
+			if (pending.length === 0) {
+				return ctx.editMessageText("✅ هیچ درخواستی در انتظار تأیید نیست.", {
+					reply_markup: {
+						inline_keyboard: [
+							[{ text: "🔙 Back", callback_data: "ops_receiver_system" }],
+						],
+					},
+				});
+			}
 
-		const buttons = pending
-			.slice(0, 8)
-			.map((acc) => [
-				{ text: `📱 ${acc.phone}`, callback_data: `view_receiver:${acc.id}` },
-			]);
-		buttons.push([{ text: "🔙 Back", callback_data: "ops_receiver_system" }]);
-		await ctx.editMessageText(`📋 *درخواست‌های در انتظار تأیید*`, {
-			parse_mode: "Markdown",
-			reply_markup: { inline_keyboard: buttons },
-		});
+			const buttons = pending
+				.slice(0, 8)
+				.map((acc) => [
+					{ text: `📱 ${acc.phone}`, callback_data: `view_receiver:${acc.id}` },
+				]);
+			buttons.push([{ text: "🔙 Back", callback_data: "ops_receiver_system" }]);
+			await ctx.editMessageText(`📋 *درخواست‌های در انتظار تأیید*`, {
+				parse_mode: "Markdown",
+				reply_markup: { inline_keyboard: buttons },
+			});
+		} catch (error) {
+			console.error("Receiver Pending Error:", error);
+			await ctx.reply("❌ خطا در دریافت درخواست‌های معلق.");
+		}
 	});
 }
 
