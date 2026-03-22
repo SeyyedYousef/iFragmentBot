@@ -1,7 +1,8 @@
 import "dotenv/config";
 import { CONFIG } from "../../core/Config/app.config.js";
 import { initUserService } from "../../Modules/User/Application/user.service.js";
-import { connectDB } from "../../Shared/Infra/Database/firestore.repository.js";
+import { connectDB as connectFirestore } from "../../Shared/Infra/Database/firestore.repository.js";
+import { connectDB as connectMongo } from "../../Shared/Infra/Database/mongo.repository.js";
 
 /**
  * Configure global process handlers to prevent silent crashes
@@ -44,12 +45,24 @@ export function isAdmin(userId) {
 export async function bootstrapServices() {
 	try {
 		console.log("🚀 Bootstrapping core services...");
-		await connectDB();
+		
+		// 1. Connect MongoDB (Primary Panel DB)
+		const mongo = await connectMongo();
+		if (mongo) console.log("✅ MongoDB Service: Connected");
+		else console.warn("⚠️ MongoDB Service: Falling back to Memory (Not recommended for persistence)");
+
+		// 2. Connect Firestore (Secondary Analytics DB)
+		const firestore = await connectFirestore();
+		if (firestore) console.log("✅ Firestore Service: Connected");
+		else console.warn("ℹ️ Firestore Service: Safe Mode/Disabled");
+
+		// 3. Init Services
 		await initUserService();
-		console.log("✅ Core services initialized");
+		
+		console.log("✅ Core bootstrap finalized");
 		return true;
 	} catch (error) {
-		console.error("❌ Bootstrap failed:", error.message);
+		console.error("❌ Bootstrap failed critical error:", error.message);
 		throw error;
 	}
 }
