@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import { get888Stats } from "../../Modules/Market/Application/market.service.js";
 import { getTonMarketStats } from "../../Modules/Market/Infrastructure/fragment.repository.js";
 import { tonPriceCache } from "../../Shared/Infra/Cache/cache.service.js";
+import { processAlerts } from "../../Modules/Alerts/Application/alert.service.js";
 
 const CACHE_FILE = "./market_data_cache.json";
 let backgroundUpdatesStarted = false;
@@ -46,7 +47,7 @@ export async function savePersistentCache() {
 /**
  * Start background refresh of market data
  */
-export function startBackgroundUpdates() {
+export function startBackgroundUpdates(bot = null) {
 	if (backgroundUpdatesStarted) return;
 	backgroundUpdatesStarted = true;
 
@@ -77,6 +78,12 @@ export function startBackgroundUpdates() {
 					timestamp: Date.now(),
 				});
 				savePersistentCache(); // Persist on update
+
+				// Process alerts if bot is provided
+				if (bot) {
+					const data = getDashboardData();
+					processAlerts(bot, { ...data, price888 });
+				}
 			}
 		} catch (e) {
 			console.error("Background +888 update failed:", e.message);

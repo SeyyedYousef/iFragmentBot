@@ -19,19 +19,21 @@ export async function getDashboardConfig() {
 			menu_account: { text: "👤 Account", style: "primary" },
 		},
 		templates: {
-			start: "<b>Hello {FIRSTNAME}!</b> ✨\nWelcome to 👑 <b>{BOT_NAME}</b>.\n\n💎 TON: <code>${ton_price}</code>\n🏴‍☠️ +888: <code>{price_888}</code>",
+			start: "<b>Hello {FIRSTNAME}!</b> ✨\nWelcome to 👑 <b>{BOT_NAME}</b>.\n\n🌍 <b>Live Market Pulse</b>\n├ 💎 TON: <code>${ton_price}</code>\n├ ⭐ Stars: <code>{stars_ton} TON</code>\n└ 🏴‍☠️ +888: <code>{price_888}</code>\n\n💳 <b>Balance:</b> <code>{CREDITS} FRG</code>",
 			profile: "✦ <b>MY PROFILE</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n👤 <b>Name:</b> {FIRSTNAME} {LASTNAME}\n🔗 <b>Username:</b> {USERNAME}\n🪪 <b>ID:</b> <code>{USERID}</code>\n\n🪙 <b>Balance:</b> <code>{credits} FRG</code>\n⏳ <b>Next Reset:</b> {reset_time}",
 			username_prompt: "✦ <b>USERNAME SCANNER</b>\n━━━━━━━━━━━━━━━━━━━━━\n\nAnalyze any Telegram username value.\n\n├ 💵 <b>Market Value</b>\n├ 🧠 <b>AI Prediction</b>\n└ 📊 <b>Historical Trends</b>\n\n💬 <i>Please send any @username to begin:</i>",
 			gift_prompt: "✦ <b>GIFT VALUATION SCANNER</b>\n━━━━━━━━━━━━━━━━━━━━━\n\nAnalyze Telegram Gift NFTs.\n\n├ 🏦 <b>Floor Prices</b>\n├ 🧬 <b>Rarity Stats</b>\n└ 📈 <b>Live Sales</b>\n\n💬 <i>Please send the link of the Gift below:</i>",
-			number_prompt: "✦ <b>+888 SCANNER</b>\n━━━━━━━━━━━━━━━━━━━━━\n\nAnalyze Anonymous Numbers.\n\n├ 📞 <b>Market Price</b>\n├ 💎 <b>Rarity Grade</b>\n└ 📈 <b>Sale Tracking</b>\n\n💬 <i>Please send the +888 number below:</i>",
-			portfolio_prompt: "✦ <b>WALLET TRACKER</b>\n━━━━━━━━━━━━━━━━━━━━━\n\nTrack Fragment portfolios.\n\n├ 💎 <b>Usernames</b>\n├ 🏴‍☠️ <b>Numbers</b>\n└ 🎁 <b>Gifts</b>\n\n💬 <i>Please send the wallet or @username:</i>",
+			number_prompt: "✦ <b>+888 SCANNER</b>\n━━━━━━━━━━━━━━━━━━━━━\n\nAnalyze Anonymous Numbers.\n\n├ 📞 <b>Market Price</b>\n├ 💎 <b>Rarity Grade</b>\n├ 🏛️ <b>Auction Status</b>\n└ 📈 <b>Sale Tracking</b>\n\n💬 <i>Please send the +888 number below:</i>",
+			portfolio_prompt: "✦ <b>WALLET TRACKER</b>\n━━━━━━━━━━━━━━━━━━━━━\n\nTrack Fragment portfolios.\n\n├ 💎 <b>Usernames</b>\n├ 🏴‍☠️ <b>Numbers</b>\n├ 🎁 <b>Gifts</b>\n└ 🔍 <b>Wallet Intel</b>\n\n💬 <i>Please send the wallet or @username:</i>",
 			compare_prompt: "✦ <b>COMPARE USERNAMES</b>\n━━━━━━━━━━━━━━━━━━━━━\n\nCompare two usernames side-by-side.\n\n💬 <i>Step 1 — Send the first @username:</i>",
 			transfer_prompt: "✦ <b>TRANSFER FRG</b>\n━━━━━━━━━━━━━━━━━━━━━\n\nSend the @username or User ID of the recipient:",
 
 			// Reports
 			report_username: "💎 <b>@{USERNAME_RAW}</b>\n<i>{DEFINITION}</i>\n\n💰 <b>Value:</b> {VAL_TON} TON\n✨ <b>Tier:</b> {TIER}\n🎯 <b>Confidence:</b> {CONFIDENCE}%\n\n――――― 🔬 <b>AI VERDICT</b> ―――――\n{REASONING}",
 			report_gift: "🎁 <b>{COLLECTION} #{NUMBER}</b>\n\n💰 <b>Value:</b> {PRICE_TON} TON\n🏷 <b>Verdict:</b> {VERDICT}\n📊 <b>Floor:</b> {FLOOR_TON} TON",
-			report_number: "📱 <b>{FORMATTED_NUMBER}</b>\n\n💰 <b>Floor:</b> {FLOOR_TON} TON\n💎 <b>Rarity:</b> {RARITY_GRADE}\n📊 <b>Market:</b> {STATUS}",
+			report_number: "📱 <b>{FORMATTED_NUMBER}</b>\n\n💰 <b>Floor:</b> {FLOOR_TON} TON\n💎 <b>Rarity:</b> {RARITY_GRADE}\n🏛️ <b>Status:</b> {STATUS}\n👤 <b>Owner:</b> <code>{OWNER_WALLET}</code>",
+			report_portfolio: "💼 <b>Portfolio: {WALLET}</b>\n\n💰 <b>Balance:</b> {BALANCE} TON\n📊 <b>Rank:</b> {RANK}\n\n📦 <b>Assets:</b>\n{ASSETS}",
+			alert_triggered: "🔔 <b>Alert: {TARGET}</b> reached {PRICE} TON!\n\n📈 Current Value: {PRICE} TON\n📉 Target: {THRESHOLD} TON\n💎 TON: ${TON_USD}",
 
 			// Misc
 			loading: "🔄 Analyzing...\n\n⏳ Fetching market data & AI insights...",

@@ -8,6 +8,7 @@ import * as marketService from "../../Modules/Market/Application/market.service.
 import { getTonMarketStats } from "../../Modules/Market/Infrastructure/fragment.repository.js";
 import { getRemainingLimits, getUser } from "../../Modules/User/Application/user.service.js";
 import { tonPriceCache } from "../../Shared/Infra/Cache/cache.service.js";
+import * as starsRepo from "../../Modules/Stars/Infrastructure/stars.repository.js";
 import { formatPremiumHTML } from "../../Shared/Infra/Telegram/telegram.formatter.js";
 
 // Import UI Helpers
@@ -46,6 +47,9 @@ export async function sendDashboard(ctx, isEdit = false) {
 		USERID: String(ctx.from.id),
 		BOT_NAME: CONFIG.BOT_NAME,
 		...marketData,
+		stars_ton: marketData.starsTon || "...",
+		price_888: marketData.price888 ? `${marketData.price888.toLocaleString()} TON` : "Updating...",
+		ton_price: marketData.tonPrice ? marketData.tonPrice.toFixed(2) : "...",
 		CREDITS: String(credits)
 	});
 
@@ -89,6 +93,7 @@ function getMarketPulse() {
 		tonPrice: ton.price,
 		tonChange: ton.change24h,
 		price888: floor888?.price,
+		starsTon: tonPriceCache.get("starsPrice")?.price,
 	};
 }
 
@@ -118,5 +123,12 @@ async function sync888Floor() {
 	try {
 		const price = await marketService.get888Stats();
 		if (price) tonPriceCache.set("floor888", { price, timestamp: Date.now() });
+		
+		// Sync Stars while we are at it
+		const stars = await starsRepo.scrapeStarsPricing();
+		if (stars && stars.length > 0) {
+			const topPackage = stars.sort((a,b) => b.stars - a.stars)[0];
+			tonPriceCache.set("starsPrice", { price: topPackage.perStarTon * 100, timestamp: Date.now() }); // Price per 100 stars
+		}
 	} catch {}
 }

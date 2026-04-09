@@ -12,6 +12,8 @@ import * as accountManager from "../../User/Application/account-manager.service.
 import giftAssetAPI from "../Infrastructure/free_gift_engine.api.js";
 import * as salesHistory from "./sales-history.service.js";
 import { getCrossMarketData } from "../Infrastructure/cross-market.repository.js";
+import { getTemplates } from "../../../Shared/Infra/Database/settings.repository.js";
+import { renderTemplate } from "../../../Shared/Infra/Telegram/telegram.cms.js";
 
 // API Configuration
 const MARKETAPP_API_BASE = "https://api.marketapp.ws";
@@ -826,6 +828,7 @@ function estimateGiftValue(
 		collectionSlug = "",
 		floorChange24h = null,
 		floorChange7d = null,
+		crossMarketData = null,
 	} = extras;
 
 	// 🧠 REALISTIC VALUE ESTIMATION V3.0
@@ -1818,6 +1821,7 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 			collectionSlug: parsed.collectionSlug, // for EWMA and trend analysis
 			floorChange24h: seetgData.floorChange24h, // NEW: See.tg floor momentum
 			floorChange7d: seetgData.floorChange7d, // NEW: See.tg 7d trend
+			crossMarketData: crossMarketData,
 		},
 	);
 
@@ -1856,343 +1860,23 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 	else if (valueVsFloor > 50 || estimation.avgRarityScore > 70)
 		_giftRating = "⭐⭐⭐⭐";
 
-	// ═══════════════════════════════════════
-	// 🔥 WORLD-CLASS GIFT REPORT FORMAT
-	// ═══════════════════════════════════════
+	// Fetch Template from CMS
+	const templates = await getTemplates();
+	const reportTemplate = templates.report_gift || "🎁 <b>{COLLECTION} #{NUMBER}</b>\n\n💰 <b>Value:</b> {PRICE_TON} TON";
 
-	let report = ``;
-
-	// ═══ HEADER ═══
-	report += `🎁 *${escapeMD(giftName)}*\n`;
-	report += `━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-
-	// Status Badge
-	const statusBadge =
-		giftStatus === "for_sale" ? "🟢 FOR SALE" : "🔵 NOT LISTED";
-	report += `${statusBadge}`;
-	if (giftPrice) {
-		report += ` • *${formatNumber(Math.round(giftPrice))} TON* (~$${formatNumber(Math.round(giftPrice * tonPrice))})`;
-	}
-	// Data quality headline
-	const dq = estimation.dataQuality || { score: 0, level: "poor", sources: [] };
-	const dqLabel = (dq.level || "").toUpperCase() || "—";
-	report += `  •  🧾 Data Quality: *${dqLabel}* (${dq.score || 0}/100)\n`;
-	report += `🔗 ${giftUrl}\n\n`;
-
-	// ═══ 💎 FAIR VALUE (EST.) ═══
-	report += `――――― 💎 *FAIR VALUE (EST.)* ―――――\n`;
-	report += `▸ 🏷️  *${formatNumber(Math.round(estimation.estimated))} TON*\n`;
-	report += `▸ 💵  _~$${formatNumber(Math.round(estimation.estimated * tonPrice))}_\n`;
-
-	if (estimation.valueRange?.low && estimation.valueRange?.high) {
-		report += `▸ 📐 Range: *${formatNumber(estimation.valueRange.low)}* — *${formatNumber(estimation.valueRange.high)} TON* (${estimation.valueRange.spread || ""})\n`;
-	}
-
-	// Value vs Floor comparison
-	if (valueVsFloor !== 0) {
-		const sign = valueVsFloor > 0 ? "+" : "";
-		const valueBar =
-			valueVsFloor > 100
-				? "🔥🔥🔥"
-				: valueVsFloor > 50
-					? "🔥🔥"
-					: valueVsFloor > 20
-						? "🔥"
-						: valueVsFloor > 0
-							? "📈"
-							: "📉";
-		report += `▸ ${valueBar} *${sign}${valueVsFloor.toFixed(0)}%* vs Floor\n`;
-	}
-
-	// ═══ 📊 COLLECTION PULSE ═══
-	report += `――――― 📊 *COLLECTION PULSE* ―――――\n`;
-	report += `▸ 🏛️ *${escapeMD(collection.name)}*\n`;
-	if (telegramInfo?.description) {
-		const desc = telegramInfo.description.substring(0, 100).replace(/\n/g, " ");
-		report += `▸ 📝 _${escapeMD(desc)}..._\n`;
-	}
-
-	// Prefer See.tg collection floor & changes if present (otherwise keep current)
-	const ci = seetgData.collectionInfo;
-	const ciFloor = nanoToTon(ci?.floor) || null;
-	const floorToDisplay = ciFloor && ciFloor > 0 ? ciFloor : collectionFloor;
-	const ci24 = safeNum(ci?.floorChange24h, null);
-	const ci7d = safeNum(ci?.floorChange7d, null);
-	const trendStr =
-		Number.isFinite(ci24) || Number.isFinite(ci7d)
-			? ` (24h: ${formatPct(ci24)} | 7d: ${formatPct(ci7d)})`
-			: typeof seetgData.floorChange24h === "number" ||
-					typeof seetgData.floorChange7d === "number"
-				? ` (24h: ${formatPct(seetgData.floorChange24h)} | 7d: ${formatPct(seetgData.floorChange7d)})`
-				: "";
-	report += `▸ 💰 Floor: *${formatNumber(Math.round(floorToDisplay))} TON*${trendStr}\n`;
-	report += `▸ #️⃣ Item: *#${formatNumber(parsed.itemNumber)}* of ${formatNumber(totalItems)}\n`;
-	report += `▸ 🏪 On Sale: *${formatNumber(onSale)}* (${totalItems > 0 ? ((onSale / totalItems) * 100).toFixed(1) : 0}%)\n`;
-	report += `▸ 👥 Owners: *${formatNumber(owners)}*\n`;
-	const _vol24h = nanoToTon(ci?.volume24h) || null;
-	const _vol7d = nanoToTon(ci?.volume7d) || volume7d || null;
-
-	// ═══ 🐳 WHALE WATCH & OWNER INSIGHTS ═══
-	if (seetgData.ownerInfo) {
-		const oi = seetgData.ownerInfo;
-		const portfolioValue = Math.round(oi.totalValue || 0);
-		const isWhale = portfolioValue > 5000;
-		const whaleEmoji = isWhale ? "🐋" : "👤";
-
-		report += `――――― ${whaleEmoji} *WHALE WATCH* ―――――\n`;
-		report += `▸ 👤 Owner: @${escapeMD(oi.username || seetgData.ownerUsername || "Unknown")}`;
-		if (oi.name) report += ` (_${escapeMD(oi.name)}_)`;
-		report += `\n`;
-
-		const status = isWhale ? "**WHALE HOLDER** 🌊" : "Active Collector";
-		report += `▸ 📊 Status: ${status}\n`;
-		report += `▸ 💰 Portfolio: *${formatNumber(portfolioValue)} TON* (~$${formatNumber(Math.round(portfolioValue * tonPrice))})\n`;
-		report += `▸ 🎁 Inventory: *${formatNumber(oi.giftsCount || 0)}* gifts\n`;
-
-		// Diamond Hands Badge
-		if (seetgData.daysHeld && seetgData.daysHeld > 30) {
-			let badge = "💎 **DIAMOND HANDS**";
-			if (seetgData.daysHeld > 180) badge = "🏆 **LEGENDARY HOLDER**";
-			else if (seetgData.daysHeld > 90) badge = "👑 **ROYAL HOLDER**";
-			report += `▸ ${badge} (Held for ${seetgData.daysHeld} days)\n`;
-		}
-		report += `\n`;
-	} else if (seetgData.ownerUsername || giftOwner) {
-		const name = seetgData.ownerUsername
-			? `@${seetgData.ownerUsername}`
-			: "Unknown Owner";
-		report += `👤 *Owner:* ${escapeMD(name)}\n\n`;
-	}
-
-	// Transfer history
-	if (seetgData.transferCount > 0) {
-		report += `🔄 *Transfers:* ${seetgData.transferCount} times\n`;
-	}
-
-	// Floor changes (from See.tg)
-	const has24h = typeof seetgData.floorChange24h === "number";
-	const has7d = typeof seetgData.floorChange7d === "number";
-
-	if (has24h || has7d) {
-		let floorTrend = "";
-		if (has24h) {
-			const emoji24h = seetgData.floorChange24h >= 0 ? "📈" : "📉";
-			const sign24h = seetgData.floorChange24h >= 0 ? "+" : "";
-			floorTrend += `${emoji24h} 24h: *${sign24h}${seetgData.floorChange24h.toFixed(1)}%* `;
-		}
-		if (has7d) {
-			const emoji7d = seetgData.floorChange7d >= 0 ? "📈" : "📉";
-			const sign7d = seetgData.floorChange7d >= 0 ? "+" : "";
-			floorTrend += `${emoji7d} 7d: *${sign7d}${seetgData.floorChange7d.toFixed(1)}%*`;
-		}
-		report += `📊 *Floor Trend:* ${floorTrend}\n`;
-	}
-
-	report += `\n`;
-
-	// ═══ 🧬 RARITY INDEX (Gift-Asset) ═══
-	if (giftAssetData?.rarity_index) {
-		const ri = giftAssetData.rarity_index;
-		let riLabel = "Common";
-		let riEmoji = "⚪";
-		if (ri <= 0.00005) {
-			riLabel = "Mythical";
-			riEmoji = "🏆";
-		} else if (ri <= 0.0001) {
-			riLabel = "Legendary";
-			riEmoji = "🦄";
-		} else if (ri <= 0.0005) {
-			riLabel = "Ultra Rare";
-			riEmoji = "💎";
-		} else if (ri <= 0.001) {
-			riLabel = "Very Rare";
-			riEmoji = "🌟";
-		} else if (ri <= 0.005) {
-			riLabel = "Rare";
-			riEmoji = "✨";
-		} else if (ri <= 0.01) {
-			riLabel = "Uncommon";
-			riEmoji = "🔷";
-		}
-		report += `――――― 🧬 *RARITY INDEX* ―――――\n`;
-		report += `▸ ${riEmoji} *${riLabel}* — Index: \`${ri}\`\n`;
-		report += `▸ 📦 Network Supply: *${formatNumber(giftAssetData.total_amount || 0)}* total\n`;
-		if (giftAssetData.mint_date)
-			report += `▸ 📅 Minted: *${new Date(giftAssetData.mint_date * 1000).toLocaleDateString()}*\n`;
-		report += `\n`;
-	}
-
-	// ═══ 🎨 ATTRIBUTES & RARITY ═══
-	report += `――――― 🎨 *ATTRIBUTES & RARITY* ―――――\n\n`;
-
-	let hasAttributes = false;
-
-	// Helper to display attribute
-	const displayAttribute = (type, details, rawValue, samples = []) => {
-		if (details) {
-			hasAttributes = true;
-			const tier = details.changesRarity
-				? details.changesRarity.tier
-				: details.rarity;
-			const rarityBar =
-				details.percentage <= 5
-					? "█████"
-					: details.percentage <= 15
-						? "████░"
-						: details.percentage <= 30
-							? "███░░"
-							: details.percentage <= 50
-								? "██░░░"
-								: "█░░░░";
-
-			let emoji = "🔹";
-			if (type === "Model") emoji = "🤖";
-			if (type === "Backdrop") emoji = "🖼️";
-			if (type === "Symbol") emoji = "✨";
-
-			report += `${emoji} *${type}:* ${tier.emoji} _${escapeMD(details.value)}_\n`;
-			report += `    ▸ Rarity: \`${rarityBar}\` *${details.percentage.toFixed(1)}%*\n`;
-
-			let floorLinkSuffix = "";
-			if (samples && samples.length > 0) {
-				floorLinkSuffix = ` → [🔗](${samples[0].link})`;
-			}
-
-			report += `    ▸ Count: ${formatNumber(details.count)} | Floor: *${formatNumber(Math.round(details.floor))} TON*${floorLinkSuffix}\n\n`;
-		} else if (rawValue) {
-			hasAttributes = true;
-			let emoji = "🔹";
-			if (type === "Model") emoji = "🤖";
-			if (type === "Backdrop") emoji = "🖼️";
-			if (type === "Symbol") emoji = "✨";
-
-			report += `${emoji} *${type}:* ⚪ _${escapeMD(rawValue)}_\n`;
-			report += `    ▸ Rarity: _Data not available yet_\n\n`;
-		}
-	};
-
-	displayAttribute(
-		"Model",
-		attributeDetails.model,
-		giftAttributes.model,
-		marketPrices.model?.samples,
-	);
-	displayAttribute(
-		"Backdrop",
-		attributeDetails.backdrop,
-		giftAttributes.backdrop,
-		marketPrices.backdrop?.samples,
-	);
-	displayAttribute(
-		"Symbol",
-		attributeDetails.symbol,
-		giftAttributes.symbol,
-		marketPrices.symbol?.samples,
-	);
-
-	if (!hasAttributes) {
-		report += `⏳ _Fetching attribute data..._\n\n`;
-	}
-
-	// ═══ 💎 VALUE DRIVERS ═══
-	if (estimation.bonuses && estimation.bonuses.length > 0) {
-		report += `――――― 💎 *VALUE DRIVERS* ―――――\n`;
-		estimation.bonuses.forEach((bonus) => {
-			report += `▸ ${bonus}\n`;
-		});
-		report += `\n`;
-	}
-
-	// ═══ 📜 OWNER HISTORY ═══
-	if (seetgData.transfers && seetgData.transfers.length > 0) {
-		report += `――――― 📜 *OWNER HISTORY* ―――――\n`;
-		const maxOwners = Math.min(seetgData.transfers.length, 5);
-		for (let i = 0; i < maxOwners; i++) {
-			const transfer = seetgData.transfers[i];
-			const ownerLabel = transfer.to_username
-				? `@${transfer.to_username}`
-				: transfer.to_name || shortenAddress(transfer.to_address || "Unknown");
-			const dateStr = transfer.date
-				? new Date(transfer.date).toLocaleDateString("en-US", {
-						month: "short",
-						day: "numeric",
-						year: "numeric",
-					})
-				: "Unknown date";
-			const priceStr = transfer.price
-				? ` • ${formatNumber(Math.round(transfer.price))} TON`
-				: "";
-			const holdingDays = transfer.holding_days
-				? ` (${transfer.holding_days}d)`
-				: "";
-			const icon = i === 0 ? "👑" : `${i + 1}️⃣`;
-			report += `▸ ${icon} ${ownerLabel}${holdingDays}${priceStr} — _${dateStr}_\n`;
-		}
-		if (seetgData.transfers.length > maxOwners) {
-			report += `▸ _...and ${seetgData.transfers.length - maxOwners} more transfers_\n`;
-		}
-		report += `\n`;
-	} else if (seetgData.transferCount > 0) {
-		report += `📜 *Transfers:* ${seetgData.transferCount} times\n\n`;
-	}
-
-	// ═══ 🧠 EXPERT ANALYSIS ═══
-	report += `――――― 🧠 *EXPERT ANALYSIS* ―――――\n`;
-	report += `${estimation.appraiserNote}\n\n`;
-
-	// ═══ 🏆 BADGES ═══
-	if (estimation.badges && estimation.badges.length > 0) {
-		report += `🏆 *Badges:* ${estimation.badges.join(" • ")}\n\n`;
-	}
-
-	// ═══ INVESTMENT SIGNAL ═══
-	let signal = "";
-	let signalDetail = "";
-	const confScore = estimation.confidenceScore || 50;
-	const trendData = estimation.advancedData?.forecast?.trend;
-	const badgeCount = estimation.badges?.length || 0;
-	const rarityAvg = estimation.avgRarityScore || 50;
-
-	if (valueVsFloor < -20 && confScore >= 60) {
-		signal = "🔥 *STRONG BUY* — Significantly undervalued";
-		signalDetail = `${Math.abs(Math.round(valueVsFloor))}% below fair value with ${confScore}% confidence.`;
-	} else if (valueVsFloor < -10) {
-		signal = "💡 *BUY OPPORTUNITY* — Below estimated value";
-		signalDetail = "Market price hasn't caught up with actual worth.";
-	} else if (valueVsFloor > 100 && estimation.totalMultiplier > 3) {
-		signal = "🏆 *TROPHY ASSET* — Collector's piece";
-		signalDetail =
-			"Exceptional premium justified by extreme rarity and demand.";
-	} else if (valueVsFloor > 50 && estimation.totalMultiplier > 2) {
-		signal = "💎 *HIGH VALUE* — Premium item";
-		signalDetail = `${Math.round(valueVsFloor)}% above floor with ${badgeCount} value driver${badgeCount !== 1 ? "s" : ""}.`;
-	} else if (trendData === "rising" || trendData === "slightly_rising") {
-		signal = "📈 *MOMENTUM* — Rising trend";
-		signalDetail = "Price forecast indicates upward trajectory.";
-	} else if (badgeCount >= 3 && rarityAvg > 80) {
-		signal = "⭐ *STRONG HOLD* — Multiple drivers";
-		signalDetail = `${badgeCount} value drivers with ${rarityAvg}% rarity score.`;
-	} else if (trendData === "declining" || trendData === "slightly_declining") {
-		signal = "⚠️ *CAUTION* — Declining trend";
-		signalDetail = "Consider waiting for price stabilization before entry.";
-	} else {
-		signal = "📊 *FAIR VALUE* — Market-aligned pricing";
-		signalDetail = "No significant discrepancies detected.";
-	}
-
-	report += `━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-	report += `${signal}\n`;
-	if (signalDetail) report += `_${signalDetail}_\n`;
-
-	// ═══ VALUE RANGE ═══
-	if (estimation.valueRange) {
-		report += `📐 Range: *${formatNumber(estimation.valueRange.low)}* — *${formatNumber(estimation.valueRange.high)}* TON (${estimation.valueRange.spread})\n`;
-	}
-	report += `━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-
-	// ═══ FOOTER ═══
-	report += `⚡ _Intelligence by @iFragmentBot_\n`;
-	report += `💹 TON: *$${tonPrice.toFixed(2)}*`;
+	const report = renderTemplate(reportTemplate, {
+		COLLECTION: collection.name,
+		NUMBER: String(parsed.itemNumber),
+		PRICE_TON: String(Math.round(estimation.estimated)),
+		VERDICT: estimation.verdict || "Standard",
+		FLOOR_TON: String(Math.round(floorToDisplay)),
+		VAL_USD: formatNumber(Math.round(estimation.estimated * tonPrice)),
+		RARITY_SCORE: String(estimation.avgRarityScore || 0),
+		BADGES: (estimation.badges || []).join(" • "),
+		OWNER_NAME: seetgData.ownerName || seetgData.ownerUsername ? `@${seetgData.ownerUsername}` : "Private",
+		STATUS: giftStatus === "for_sale" ? "🟢 FOR SALE" : "🔵 NOT LISTED",
+		LINK: giftUrl
+	});
 
 	// Determine Image URL
 	let imageUrl = null;

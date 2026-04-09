@@ -463,6 +463,18 @@ function registerDashboardRoutes(bot, isAdmin) {
 		});
 	});
 
+	// 6.b Variable Guide
+	bot.action("admin_cms_guide", async (ctx) => {
+		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery();
+		await ctx.answerCbQuery();
+		await ctx.editMessageText(UI.getCMSGuideMessage(), {
+			parse_mode: "Markdown",
+			reply_markup: {
+				inline_keyboard: [[Markup.button.callback("🔙 Back to CMS", "admin_cms")]]
+			}
+		});
+	});
+
 	// 7. Edit Template Select
 	bot.action(/^edit_tpl_(.+)$/, async (ctx) => {
 		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery();

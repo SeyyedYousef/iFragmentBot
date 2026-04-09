@@ -43,22 +43,20 @@ export async function initJobHandlers(bot) {
 		try {
 			const result = await generateGiftReport(link, tonPrice);
 
-			const finalCaption = renderTemplate(templates.gifts || result.report, {
+			const finalCaption = renderTemplate(templates.report_gift || result.report, {
 				...globalVars,
-				collection: result.collection,
-				number: String(result.itemNumber),
-				verdict: result.verdict,
-				price_ton: String(result.estimatedValue),
-				price_usd: String(Math.round(result.estimatedValue * tonPrice)),
-				color: result.color || "",
-				slug: result.slug || "",
-				badges: (result.badges || []).join(", "),
-				floor_portals: String(result.crossMarket?.portals?.floor || "N/A"),
-				floor_tonnel: String(result.crossMarket?.tonnel?.floor || "N/A"),
-				volume_portals: String(result.crossMarket?.portals?.volume || "N/A"),
-				volume_tonnel: String(result.crossMarket?.tonnel?.volume || "N/A"),
-				last_sale_portals: String(result.crossMarket?.portals?.lastSale || "N/A"),
-				last_sale_tonnel: String(result.crossMarket?.tonnel?.lastSale || "N/A"),
+				COLLECTION: result.collection,
+				NUMBER: String(result.itemNumber),
+				VERDICT: result.verdict,
+				PRICE_TON: String(Math.round(result.estimatedValue)),
+				VAL_USD: String(Math.round(result.estimatedValue * tonPrice)),
+				COLOR: result.color || "",
+				SLUG: result.slug || "",
+				BADGES: (result.badges || []).join(", "),
+				FLOOR_PORTALS: String(result.crossMarket?.portals?.floor || "N/A"),
+				FLOOR_TONNEL: String(result.crossMarket?.tonnel?.floor || "N/A"),
+				VOLUME_PORTALS: String(result.crossMarket?.portals?.volume || "N/A"),
+				VOLUME_TONNEL: String(result.crossMarket?.tonnel?.volume || "N/A"),
 			});
 
 			// Send textual report
@@ -147,24 +145,17 @@ export async function initJobHandlers(bot) {
 			const result = await generateNumberReport(input, tonPrice);
 
 			// CMS Template Rendering
-			const finalCaption = renderTemplate(templates.numbers || result.report, {
+			const finalCaption = renderTemplate(templates.report_number || result.report, {
 				...globalVars,
-				number: result.number,
-				formatted_number: result.formattedNumber,
-				price_ton: String(result.priceTon),
-				estimated_value: String(result.estimatedValue),
-				floor_ton: String(result.floor),
-				vs_floor: String(Math.round(result.vsFloor)),
-				status: result.status,
-				pattern: result.pattern,
-				pattern_label: result.patternLabel,
-				owner: result.owner || "",
-				url: result.url || "",
-				confidence: String(result.confidence),
-				rarity_score: String(result.rarityScore),
-				rarity_rank: result.rarityRank,
-				owner_label: result.ownerLabel,
-				other_numbers: String(result.otherNumbersCount || 0)
+				FORMATTED_NUMBER: result.formattedNumber,
+				VAL_TON: String(Math.round(result.priceTon || result.estimatedValue)),
+				VAL_USD: String(Math.round((result.priceTon || result.estimatedValue) * tonPrice)),
+				FLOOR_TON: String(result.floor),
+				VS_FLOOR: String(Math.round(result.vsFloor)),
+				STATUS: result.status,
+				RARITY_GRADE: result.rarityRank || "Standard",
+				OWNER_WALLET: result.owner ? `${result.owner.substring(0, 8)}...${result.owner.slice(-6)}` : "Private",
+				URL: result.url || ""
 			});
 
 			await bot.telegram.sendMessage(chatId, finalCaption, {

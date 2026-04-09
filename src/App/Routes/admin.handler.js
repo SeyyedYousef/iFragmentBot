@@ -195,6 +195,11 @@ async function handleNewsPostText(ctx, state, bot) {
 			headline: headline
 		});
 
+		// Safety check: Telegram will throw "no photo" if buffer is empty
+		if (!imageBuffer || imageBuffer.length === 0) {
+			throw new Error("Generated image buffer is empty. Please check the image source and try again.");
+		}
+
 		try { await bot.telegram.deleteMessage(chatId, statusMsg.message_id); } catch {}
 
 		await ctx.replyWithPhoto({ source: imageBuffer }, {
@@ -203,6 +208,8 @@ async function handleNewsPostText(ctx, state, bot) {
 		});
 	} catch (error) {
 		console.error("News card generation failed:", error);
+		// Clean up status message on error if it still exists
+		try { if (statusMsg) await bot.telegram.deleteMessage(chatId, statusMsg.message_id); } catch {}
 		await ctx.reply(`❌ Generation failed: ${error.message}`);
 	}
 	return true;

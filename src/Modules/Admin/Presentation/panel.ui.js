@@ -289,7 +289,9 @@ export function getCMSMessage() {
 Edit any bot response dynamically. Use markers like \`{FIRSTNAME}\` or \`{HOUR}\` as placeholders.
 
 *Support:* HTML Tags & Premium Emojis \`[id]\` are fully supported in **Messages**. 
-*Note:* Telegram Buttons only support plain text; Premium Emojis in buttons will be shown as \`✨\`.`;
+*Note:* Telegram Buttons only support plain text; Premium Emojis in buttons will be shown as \`✨\`.
+
+💡 *Need Help?* Click the **Variable Guide** button below to see all available placeholders for each section.`;
 }
 
 export function getCMSKeyboard(templates) {
@@ -306,7 +308,8 @@ export function getCMSKeyboard(templates) {
 		}
 		keyboard.push(row);
 	}
-
+	
+	keyboard.push([Markup.button.callback("📖 Variable Guide", "admin_cms_guide")]);
 	keyboard.push([Markup.button.callback("🔙 Back", "admin_dashboard_ui")]);
 
 	return { reply_markup: { inline_keyboard: keyboard } };
@@ -322,52 +325,55 @@ export function getTplEditorMessage(key, currentContent) {
 			"{CREDITS} / {FRG} - Balance",
 			"{ton_price} - Live TON Market Price",
 			"{price_888} - +888 Floor price",
-			"{HOUR}:{MIN}:{SEC} - Current time",
-			"{DAY}/{MON}/{YEAR} - Current date",
-			"{BOT_NAME} - Bot identity"
+			"{stars_ton} - Stars/TON conversion",
+			"{BOT_NAME} - Bot's name"
 		],
 		start: [
-			"{FIRSTNAME} - Welcome name",
-			"{ton_price} - Featured market price",
-			"{CREDITS} - User balance"
+			"{FIRSTNAME} - User's name",
+			"{ton_price} - Current price",
+			"{stars_ton} - Stars rate",
+			"{price_888} - +888 price"
 		],
 		report_username: [
-			"{username} - Target username",
-			"{insight} - AI generated insight",
-			"{price_ton} - Estimated value in TON",
-			"{price_usd} - Estimated value in USD",
-			"{rarity_label} - Tier (Common, Elite, etc.)",
-			"{status} - Fragment status",
-			"{owner} - Current owner wallet",
-			"{url} - Fragment link"
+			"{USERNAME_RAW} - Target username",
+			"{DEFINITION} - Word definition",
+			"{VAL_TON} - Value in TON",
+			"{VAL_USD} - Value in USD",
+			"{TIER} - Rarity Tier",
+			"{CONFIDENCE} - AI Confidence %",
+			"{REASONING} - AI reasoning text"
 		],
 		report_gift: [
-			"{collection} - Gift collection name",
-			"{number} - Item number (e.g. #123)",
-			"{price_ton} - Valuation in TON",
-			"{verdict} - AI verdict (Undervalued, etc.)",
-			"{color} - Collection theme color",
-			"{badges} - Special attributes list",
-			"---------- Cross Market ----------",
-			"{floor_portals} - Floor price on Portals.tg",
-			"{floor_tonnel} - Floor price on Tonnel Network",
-			"{volume_portals} - Total volume on Portals.tg",
-			"{volume_tonnel} - Total volume on Tonnel Network",
-			"{last_sale_portals} - Last sale price on Portals.tg",
-			"{last_sale_tonnel} - Last sale price on Tonnel Network"
+			"{COLLECTION} - Gift series name",
+			"{NUMBER} - Item number (e.g. #7)",
+			"{PRICE_TON} - Fair value estimate",
+			"{VAL_USD} - Value in USD",
+			"{VERDICT} - AI status (Undervalued)",
+			"{FLOOR_TON} - Market Floor price",
+			"{OWNER_NAME} - Owner username/address",
+			"{STATUS} - Market status",
+			"{LINK} - Link to NFT"
 		],
 		report_number: [
-			"{formatted_number} - Visual number (+888...)",
-			"{estimated_value} - Market value in TON",
-			"{floor_ton} - Current floor price",
-			"{status} - Market status (On Sale, etc.)",
-			"{pattern_label} - Logic pattern (Triple, etc.)"
+			"{FORMATTED_NUMBER} - +888... format",
+			"{VAL_TON} - Market value in TON",
+			"{VAL_USD} - Market value in USD",
+			"{FLOOR_TON} - Current floor price",
+			"{RARITY_GRADE} - Logic pattern grade",
+			"{STATUS} - Listing status",
+			"{OWNER_WALLET} - Shortened wallet address"
 		],
-		profile: [
-			"{FIRSTNAME} - Account name",
-			"{FRG} - Credits balance",
-			"{total_reports} - User activity count",
-			"{reset_time} - Next free credit time"
+		report_portfolio: [
+			"{WALLET} - Short wallet address",
+			"{BALANCE} - Wallet balance (TON)",
+			"{RANK} - Intel Rank (Whale/Collector)",
+			"{ASSETS} - List of found assets"
+		],
+		alert_triggered: [
+			"{TARGET} - Item name",
+			"{PRICE} - Trigger price (TON)",
+			"{THRESHOLD} - User's limit",
+			"{TON_USD} - Current TON rate"
 		]
 	};
 
@@ -394,6 +400,49 @@ ${globalVars.slice(0, 6).map(v => `• \`${v}\``).join("\n")}...
 3. HTML supported: \`<b>\`, \`<i>\`, \`<pre>\`, \`<code>\`.`;
 
 	return msg;
+}
+
+export function getCMSGuideMessage() {
+	return `📖 *CMS Variable Master Guide*
+━━━━━━━━━━━━━━━━━━━━━
+
+🌍 *Global (Works Everywhere)*
+• \`{FIRSTNAME}\` - User's name
+• \`{USERNAME}\` - User's @handle
+• \`{BOT_NAME}\` - Current bot name
+• \`{ton_price}\` - Live TON price ($)
+• \`{price_888}\` - +888 Floor (TON)
+• \`{stars_ton}\` - Stars/TON rate
+
+💎 *Username Report*
+• \`{USERNAME_RAW}\` - The @username
+• \`{VAL_TON}\` - Est. Value in TON
+• \`{TIER}\` - Rarity (Elite, Rare)
+• \`{DEFINITION}\` - AI word definition
+• \`{CONFIDENCE}\` - AI Certainty %
+
+🎁 *Gift Report*
+• \`{COLLECTION}\` - Series name
+• \`{NUMBER}\` - Item # (e.g. #7)
+• \`{PRICE_TON}\` - Fair value (TON)
+• \`{FLOOR_TON}\` - Market floor
+• \`{VERDICT}\` - AI status (Undervalued)
+• \`{OWNER_NAME}\` - Owner handle/address
+
+📱 *Number Report (+888)*
+• \`{FORMATTED_NUMBER}\` - +888...
+• \`{RARITY_GRADE}\` - Pattern grade
+• \`{OWNER_WALLET}\` - Owner address
+• \`{VAL_TON}\` - Market value
+
+💼 *Portfolio & Alerts*
+• \`{BALANCE}\` - Wallet balance
+• \`{RANK}\` - Whale/Collector rank
+• \`{TARGET}\` - Item being tracked
+• \`{THRESHOLD}\` - Alert price set
+
+⚠️ *Html Support:* \`<b>\`, \`<i>\`, \`<code>\`, \`<pre>\`
+⚠️ *Emoji:* Use \`[id]\` for Premium Emojis.`.trim();
 }
 
 // ==================== FEATURES EDITOR ====================

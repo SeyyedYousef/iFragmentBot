@@ -4,6 +4,9 @@
  * Speed: < 1 second (compared to 30-60 seconds with Puppeteer/browser scraping)
  */
 import fetch from "node-fetch";
+import { getWalletIntel } from "../Infrastructure/wallet.repository.js";
+import { getTemplates } from "../../../Shared/Infra/Database/settings.repository.js";
+import { renderTemplate } from "../../../Shared/Infra/Telegram/telegram.cms.js";
 
 // Official Fragment NFT Collection addresses - FULL bounceable address format
 // Only these are the REAL official Fragment collections
@@ -629,7 +632,11 @@ export async function getPortfolio(walletAddress) {
 			totalUsernames: 0,
 			totalNumbers: 0,
 			totalGifts: 0,
+			intel: null
 		};
+
+		// 2.5 Fetch Wallet Intelligence (SuperBot Power)
+		portfolio.intel = await getWalletIntel(walletAddress);
 
 		// Process each NFT
 		for (const nft of nfts) {
@@ -776,73 +783,32 @@ export async function getPortfolio(walletAddress) {
  * @param {number} tonPrice - Current TON price in USD
  * @returns {string} Formatted message
  */
-export function formatPortfolioMessage(portfolio, _tonPrice = 1.55) {
+export async function formatPortfolioMessage(portfolio, tonPrice = 5.5) {
 	if (!portfolio || portfolio.error) {
 		return "❌ Could not fetch portfolio data.";
 	}
 
-	const total = portfolio.totalUsernames + portfolio.totalNumbers;
+	const templates = await getTemplates();
+	const reportTemplate = templates.report_portfolio || 
+        "💼 <b>Portfolio: {WALLET}</b>\n\n" +
+        "💰 <b>Balance:</b> {BALANCE} TON\n" +
+        "📊 <b>Rank:</b> {RANK}\n\n" +
+        "📦 <b>Assets:</b>\n{ASSETS}\n\n" +
+        "⚡ <i>Intelligence by @iFragmentBot</i>";
 
-	if (total === 0) {
-		return (
-			`💼 *Portfolio Overview*\n\n` +
-			`🔗 *Wallet:* \`${portfolio.wallet?.substring(0, 8)}...${portfolio.wallet?.slice(-6)}\`\n\n` +
-			`⚠️ No Fragment assets found.\n\n` +
-			`_This wallet has no Telegram usernames or anonymous numbers from Fragment._`
-		);
-	}
+	// Prepare assets list summary
+	let assetsList = "";
+	if (portfolio.totalUsernames > 0) assetsList += `• 💎 Usernames: <b>${portfolio.totalUsernames}</b>\n`;
+	if (portfolio.totalNumbers > 0) assetsList += `• 🔢 Numbers: <b>${portfolio.totalNumbers}</b>\n`;
+	if (portfolio.totalGifts > 0) assetsList += `• 🎁 Gifts: <b>${portfolio.totalGifts}</b>\n`;
+	if (!assetsList) assetsList = "<i>No assets found.</i>";
 
-	let msg = `💼 *Portfolio Overview*\n\n`;
-	msg += `🔗 *Wallet:* \`${portfolio.wallet?.substring(0, 8)}...${portfolio.wallet?.slice(-6)}\`\n\n`;
+	const walletShort = `${portfolio.wallet?.substring(0, 8)}...${portfolio.wallet?.slice(-6)}`;
 
-	// Summary
-	msg += `━━━ 📊 *Summary* ━━━\n\n`;
-	msg += `💎 *Usernames:* ${portfolio.totalUsernames}\n`;
-	msg += `📱 *Anonymous Numbers:* ${portfolio.totalNumbers}\n`;
-	msg += `📦 *Total Assets:* ${total}\n\n`;
-
-	// Usernames List - compact format with numbering
-	if (portfolio.usernames.length > 0) {
-		msg += `━━━ 💎 *Usernames* ━━━\n\n`;
-
-		const usernameItems = portfolio.usernames.slice(0, 100).map((u, i) => {
-			// Escape underscores to prevent Markdown parsing issues
-			const escapedName = u.name.replace(/_/g, "\\_");
-			return `${i + 1}.@${escapedName}`;
-		});
-
-		// Group usernames in chunks of 5 per line
-		const usernameLines = [];
-		for (let i = 0; i < usernameItems.length; i += 5) {
-			usernameLines.push(usernameItems.slice(i, i + 5).join(" • "));
-		}
-		msg += usernameLines.join("\n");
-
-		if (portfolio.usernames.length > 100) {
-			msg += `\n\n_...and ${portfolio.usernames.length - 100} more usernames_`;
-		}
-		msg += `\n\n`;
-	}
-
-	// Anonymous Numbers List - compact format with numbering
-	if (portfolio.anonymousNumbers.length > 0) {
-		msg += `━━━ 📱 *Anonymous Numbers* ━━━\n\n`;
-
-		const numberItems = portfolio.anonymousNumbers
-			.slice(0, 100)
-			.map((n, i) => `${i + 1}.${n.number}`);
-
-		// Group numbers in chunks of 3 per line
-		const numberLines = [];
-		for (let i = 0; i < numberItems.length; i += 3) {
-			numberLines.push(numberItems.slice(i, i + 3).join(" • "));
-		}
-		msg += numberLines.join("\n");
-
-		if (portfolio.anonymousNumbers.length > 100) {
-			msg += `\n\n_...and ${portfolio.anonymousNumbers.length - 100} more numbers_`;
-		}
-	}
-
-	return msg;
+	return renderTemplate(reportTemplate, {
+		WALLET: walletShort,
+		BALANCE: String((portfolio.balance || 0).toFixed(2)),
+		RANK: portfolio.intel?.rank || "Collector",
+		ASSETS: assetsList
+	});
 }

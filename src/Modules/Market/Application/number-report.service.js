@@ -9,9 +9,11 @@ import { parse } from "csv-parse/sync";
 import { tonPriceCache } from "../../../Shared/Infra/Cache/cache.service.js";
 import * as scraplingService from "../../../Shared/Infra/Scraping/scrapling.service.js";
 import * as telegramClient from "../../../Shared/Infra/Telegram/telegram.client.js";
-import { getBrowser } from "../../../Shared/UI/Components/card-generator.component.js";
 import * as marketService from "./market.service.js";
 import * as portfolioService from "./portfolio.service.js";
+import { getTemplates } from "../../../Shared/Infra/Database/settings.repository.js";
+import { renderTemplate } from "../../../Shared/Infra/Telegram/telegram.cms.js";
+import * as numbersRepo from "../Infrastructure/numbers.repository.js";
 
 // Global cached numbers CSV data
 let numbersDatabase = null;
@@ -639,109 +641,20 @@ export async function generateNumberReport(input, tonPrice = 5.5) {
 					? "✅ SOLD"
 					: "🔵 NOT LISTED";
 
-	let report = "";
-	report += `📱 *${formattedNumber}*\n`;
-	report += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-	report += `🔵 ${statusDisplay}`;
-	if (scraped.priceTon)
-		report += `  •  Price: *${formatNumber(scraped.priceTon)} TON*`;
-	report += `\n🔗 [Fragment](${scraped.url})\n\n`;
+	// Fetch Template from CMS
+	const templates = await getTemplates();
+	const reportTemplate = templates.report_number || "📱 <b>{FORMATTED_NUMBER}</b>\n\n💰 <b>Value:</b> {VAL_TON} TON";
 
-	report += `――――― 📊 *MARKET SNAPSHOT* ―――――\n`;
-	report += `▸ Status: *${statusDisplay}*\n`;
-	const lastSale = scraped.lastSale || getgemsData?.lastSale;
-	if (lastSale)
-		report += `▸ Last Sale: *${formatNumber(lastSale)} TON*${scraped.lastSaleDate ? ` (${scraped.lastSaleDate})` : ""} 🏆\n`;
-	if (scraped.owner)
-		report += `▸ Owner: \`${scraped.owner.substring(0, 8)}...${scraped.owner.slice(-6)}\`\n`;
-	report += `\n`;
-
-	if (getgemsData || nftAddress) {
-		report += `―――― 🏦 *MULTI‑MARKET LIQUIDITY* ――――\n`;
-		report += `▸ 💎 GetGems: ${getgemsData?.priceTon ? `*${formatNumber(getgemsData.priceTon)} TON*` : "NOT LISTED"}`;
-		if (getgemsData?.lastSale && !scraped.lastSale)
-			report += ` (Last: ${formatNumber(getgemsData.lastSale)} TON)`;
-		report += `\n`;
-
-		if (getgemsData?.isRestricted) {
-			report += `⚠️ *RESTRICTED:* Potential risk tag (Scam/Warning) detected on GetGems.\n`;
-		}
-
-		if (nftAddress) {
-			report += `▸ 📜 Smart Contract: \`${nftAddress}\`\n`;
-			report += `▸ 🏪 Others: [Portals](https://portals.art/nft/${ANON_NUMBER_COLLECTION}/${nftAddress}) / [MRKT](https://mrkt.com/nft/${ANON_NUMBER_COLLECTION}/${nftAddress})\n`;
-		}
-
-		if (
-			getgemsData?.owner &&
-			scraped.owner &&
-			getgemsData.owner !== scraped.owner
-		) {
-			report += `▸ 👤 GG Owner: \`${getgemsData.owner.substring(0, 8)}...${getgemsData.owner.slice(-6)}\` (Sync Lag?)\n`;
-		}
-		report += `\n`;
-	}
-
-	report += `――――― 💎 *VALUE ESTIMATE* ―――――\n`;
-	report += `▸ 🏷️  Fair Value: *~${formatNumber(estimated)} TON*\n`;
-	report += `▸ 💵  ~$${formatNumber(estUsd)}\n`;
-	report += `▸ 📐 Range: ${formatNumber(lowEst)} — ${formatNumber(highEst)} TON (±25%)\n`;
-	report += `▸ 📊 vs Floor (+888): *${vsFloor >= 0 ? "+" : ""}${vsFloor.toFixed(0)}%*\n\n`;
-
-	report += `――――― 📈 *COLLECTION PULSE* ―――――\n`;
-	report += `▸ 💰 Floor: *${formatNumber(floor)} TON*\n`;
-	if (collectionPulse) {
-		if (collectionPulse.owners)
-			report += `▸ 👥 Owners: *${collectionPulse.owners}*\n`;
-		if (collectionPulse.items)
-			report += `▸ #️⃣ Items: *${collectionPulse.items}*\n`;
-		if (collectionPulse.volume7d)
-			report += `▸ 💹 7d Vol: *${formatNumber(collectionPulse.volume7d)} TON*\n`;
-	}
-	report += `\n`;
-
-	// --- WHALE WATCH & OWNER INSIGHTS ---
-	let otherNumbersCount = 0;
-	let ownerLabel = "Standard Holder";
-	if (scraped.owner) {
-		try {
-			const port = await portfolioService.getPortfolio(scraped.owner);
-			if (port?.anonymousNumbers) {
-				otherNumbersCount = port.anonymousNumbers.length;
-				if (otherNumbersCount >= 10) ownerLabel = "🐋 MEG-WHALE";
-				else if (otherNumbersCount >= 5) ownerLabel = "🐬 WHALE";
-				else if (otherNumbersCount >= 2) ownerLabel = "🐙 COLLECTOR";
-			}
-		} catch (_e) { }
-	}
-
-	report += `――――― 👥 *HOLDER INSIGHTS* ―――――\n`;
-	report += `▸ 📱 Registered: ${registeredText}\n`;
-	if (scraped.owner) {
-		report += `▸ 👤 Owner: \`${scraped.owner.substring(0, 8)}...${scraped.owner.slice(-6)}\`\n`;
-		report += `▸ 🏷️ Type: *${ownerLabel}*\n`;
-		if (otherNumbersCount > 1)
-			report += `▸ 📦 Collection: *Holds ${otherNumbersCount} numbers*\n`;
-	}
-	report += `\n`;
-
-	if (scraped.history && scraped.history.length > 0) {
-		report += `――――― 📜 *HISTORY* ―――――\n`;
-		scraped.history.slice(0, 3).forEach((h) => {
-			report += `▸ ${h.date} @ ${formatNumber(h.price)} TON\n`;
-		});
-		report += `\n`;
-	}
-
-	report += `――――― 🎰 *NUMBER PATTERN* ―――――\n`;
-	report += `▸ Type: *${pattern.label}*\n`;
-	report += `▸ Rarity: *${pattern.rarityRank}* (${pattern.score}/100)\n`;
-	report += `▸ Pattern Floor: *${formatNumber(pattern.patternFloor)} TON*\n`;
-	if (pattern.bonus > 0) report += `▸ Bonus: +${pattern.bonus}%\n\n`;
-
-	report += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-	report += `⚡ _Intelligence by @iFragmentBot_  •  TON: $${tonPrice.toFixed(2)}\n`;
-	report += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+	const report = renderTemplate(reportTemplate, {
+		FORMATTED_NUMBER: formattedNumber,
+		FLOOR_TON: String(floor),
+		RARITY_GRADE: pattern.rarityRank || "Standard",
+		STATUS: statusDisplay,
+		OWNER_WALLET: scraped.owner ? `${scraped.owner.substring(0, 8)}...${scraped.owner.slice(-6)}` : "Private",
+		VAL_TON: String(Math.round(estimated)),
+		VAL_USD: formatNumber(estUsd),
+		REPORT_COUNT: "1" // This could be dynamic later
+	});
 
 	return {
 		report,

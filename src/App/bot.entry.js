@@ -155,7 +155,7 @@ async function launchBot() {
 		await bootstrapServices(); // DB + User System
 		await loadPersistentCache(); // Market Cache
 		await initJobHandlers(bot); // Reports Queue
-		startBackgroundUpdates(); // TON/888 Fetcher
+		startBackgroundUpdates(bot); // TON/888 Fetcher
 
 		console.log("⏳ Clearing Webhook & Launching Polling...");
 		await bot.telegram.deleteWebhook({ drop_pending_updates: true });

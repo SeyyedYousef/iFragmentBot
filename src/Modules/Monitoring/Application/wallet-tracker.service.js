@@ -10,6 +10,8 @@ import { getPortfolio } from "../../Market/Application/portfolio.service.js";
 
 // Import UI Helpers
 import * as UI from "../Presentation/wallet.ui.js";
+import { getTemplates } from "../../../Shared/Infra/Database/settings.repository.js";
+import { renderTemplate, fetchUserVariables } from "../../../Shared/Infra/Telegram/telegram.cms.js";
 
 // Pagination settings
 const ITEMS_PER_PAGE = 25;
@@ -34,7 +36,21 @@ export async function generateWalletReport(ctx, wallet) {
 		const gCount = portfolio.totalGifts || 0;
 		const tonPrice = tonPriceCache.get("price") || 5.5;
 
-		const msg = UI.getWalletOverviewMessage(wallet, portfolio, tonPrice);
+		// CMS Logic
+		const templates = await getTemplates();
+		const globalVars = await fetchUserVariables(ctx.from.id, ctx.telegram);
+		const rank = getRank((portfolio.balance || 0) + (portfolio.estimatedValue || 0));
+		
+		const assetsSummary = `• Names: ${uCount} | Numbers: ${nCount} | Gifts: ${gCount}`;
+		
+		const msg = renderTemplate(templates.report_portfolio || UI.getWalletOverviewMessage(wallet, portfolio, tonPrice), {
+			...globalVars,
+			WALLET: `${wallet.substring(0, 8)}...${wallet.slice(-6)}`,
+			BALANCE: String(portfolio.balance.toFixed(2)),
+			RANK: rank,
+			ASSETS: assetsSummary
+		});
+
 		const kb = UI.getWalletMainKeyboard(uCount, nCount, gCount, wallet);
 
 		// Store session

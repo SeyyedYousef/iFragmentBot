@@ -153,22 +153,22 @@ export async function processUsernameReport(chatId, username, tonPrice, bot, use
 		suggestions,
 	);
 	
-	const finalCaption = renderTemplate(templates.usernames || caption, {
+	const finalCaption = renderTemplate(templates.report_username || caption, {
 		...globalVars,
-		username,
-		insight,
-		rarity_score: String(rarity.score),
-		rarity_percent: String(rarity.percent),
-		rarity_label: rarity.label,
-		price_ton: String(estValue.ton),
-		price_usd: String(estValue.usd),
-		status: fragmentData.statusText || fragmentData.status,
-		last_sale: String(fragmentData.lastSalePrice || ""),
-		ends_in: fragmentData.endsIn || "",
-		highest_bid: String(fragmentData.highestBid || ""),
-		min_bid: String(fragmentData.minBid || ""),
-		owner: fragmentData.owner || "",
-		url: fragmentData.url || ""
+		USERNAME_RAW: username,
+		DEFINITION: insight,
+		VAL_TON: String(estValue.ton),
+		VAL_USD: String(estValue.usd),
+		TIER: rarity.label,
+		CONFIDENCE: String(Math.round((1 - rarity.score / 100) * 100)), // Confidence calculation
+		REASONING: insight, // Reasoning and definition often overlap in our AI logic
+		STATUS: fragmentData.statusText || fragmentData.status,
+		LAST_SALE: String(fragmentData.lastSalePrice || ""),
+		ENDS_IN: fragmentData.endsIn || "",
+		HIGHEST_BID: String(fragmentData.highestBid || ""),
+		MIN_BID: String(fragmentData.minBid || ""),
+		OWNER: fragmentData.owner || "",
+		URL: fragmentData.url || ""
 	});
 
 	// 6. Send Result
