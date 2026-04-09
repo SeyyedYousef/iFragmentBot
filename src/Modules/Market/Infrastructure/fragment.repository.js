@@ -47,7 +47,7 @@ function findWindowsChrome() {
 // ==================== BROWSER POOL CONFIGURATION ====================
 const POOL_CONFIG = {
 	min: 0, // Minimum browsers to keep ready (0 to avoid idle churn)
-	max: 2, // Maximum concurrent browsers (optimized for 512MB RAM)
+	max: 1, // Maximum concurrent browsers (optimized for 512MB RAM - DON'T INCREASE)
 	maxUses: 30, // Recycle browser after 30 uses (prevent memory leaks)
 	idleTimeoutMs: 30000, // Close idle browsers after 30 seconds (aggressive cleanup)
 	acquireTimeoutMs: 30000, // Timeout for acquiring browser
@@ -237,47 +237,9 @@ export async function scrapeFragment(username) {
 			console.warn(`⚠️ Scrapling Failed: ${scraplingError.message}`);
 		}
 
-		// 3. FINAL FALLBACK: Meaningful metadata check
-		console.log(`⚠️ All scrapers exhausted for @${cleanUsername}`);
-		return _createEmptyScrapeResult(cleanUsername, true);
+		// 3. FINAL FALLBACK: Puppeteer (Only if others failed)
+		console.log(`⚠️ HTTP/Scrapling conclusive failed for @${cleanUsername}, trying Puppeteer fallback...`);
 
-		// [LEGACY PUPPETEER BELOW - DISABLED BY RETURN ABOVE]
-		const _cleanUsername = username.replace("@", "").trim().toLowerCase();
-		console.log(`🔍 Scraping @${_cleanUsername}...`);
-
-
-		// 1. FAST PATH: HTTP Scrape (No Puppeteer)
-		// This handles 90% of cases instantly without launching a browser
-		try {
-			const httpData = await scrapeFragmentHttp(cleanUsername);
-			if (hasMeaningfulFragmentData(httpData)) {
-				console.log(`⚡ HTTP Scrape SUCCESS for @${cleanUsername}`);
-				return httpData;
-			}
-			console.log(
-				`⚠️ HTTP Scrape inconclusive for @${cleanUsername}, trying Scrapling...`,
-			);
-		} catch (httpError) {
-			console.warn(
-				`⚠️ HTTP Scrape failed: ${httpError.message}, trying Scrapling...`,
-			);
-		}
-
-		// 2. MODERN PATH: Scrapling (Stealth Headless Chrome via Python)
-		try {
-			const scraplingData = await scrapeFragmentScrapling(cleanUsername);
-			if (hasMeaningfulFragmentData(scraplingData)) {
-				console.log(`🕵️ Scrapling SUCCESS for @${cleanUsername}`);
-				return scraplingData;
-			}
-			console.log(
-				`⚠️ Scrapling yielded ambiguous data for @${cleanUsername}, falling back to Puppeteer...`,
-			);
-		} catch (scraplingError) {
-			console.warn(
-				`⚠️ Scrapling fetch failed: ${scraplingError.message}, falling back to Puppeteer...`,
-			);
-		}
 
 		// 3. SLOW PATH: Puppeteer (Fallback)
 		// Used for complex pages or when HTTP is blocked/fails
@@ -675,7 +637,11 @@ export async function scrapeFragment(username) {
 				}
 			}
 			if (browser) {
-				await releaseBrowser(browser);
+				try {
+					await releaseBrowser(browser);
+				} catch (_e) {
+					/* ignore */
+				}
 			}
 		}
 	});
@@ -1489,7 +1455,9 @@ export async function streamShortInsight(username, onChunk) {
 	const apiKey = CONFIG.GEMINI_API_KEY || process.env.GEMINI_API_KEY;
 
 	if (!apiKey || apiKey === "YOUR_GEMINI_API_KEY_HERE") {
-		return onChunk("✨ Analyzing local patterns...");
+		const fallback = "✨ " + (GOLDEN_DICTIONARY?.[cleanUsername] || "Digital heritage artifact.");
+		await onChunk(fallback);
+		return fallback;
 	}
 
 	try {
@@ -1507,34 +1475,40 @@ export async function streamShortInsight(username, onChunk) {
 
 		if (!response.ok) throw new Error("Stream Failed");
 
-		const reader = response.body.getReader();
-		const decoder = new TextDecoder();
 		let fullText = "✨ ";
-
-		while (true) {
-			const { done, value } = await reader.read();
-			if (done) break;
-
-			const chunk = decoder.decode(value, { stream: true });
-			const lines = chunk.split("\n");
-
-			for (const line of lines) {
-				if (line.startsWith("data: ")) {
-					try {
-						const json = JSON.parse(line.substring(6));
-						const part = json.candidates?.[0]?.content?.parts?.[0]?.text;
-						if (part) {
-							fullText += part;
-							await onChunk(fullText);
-						}
-					} catch (e) {}
+		
+		return new Promise((resolve, reject) => {
+			let buffer = "";
+			
+			response.body.on("data", async (chunk) => {
+				buffer += chunk.toString();
+				const lines = buffer.split("\n");
+				buffer = lines.pop(); // Keep partial line
+				
+				for (const line of lines) {
+					if (line.startsWith("data: ")) {
+						try {
+							const json = JSON.parse(line.substring(6));
+							const part = json.candidates?.[0]?.content?.parts?.[0]?.text;
+							if (part) {
+								fullText += part;
+								// We don't await here to avoid blocking the stream read, 
+								// but inside we should handle any async issues.
+								onChunk(fullText).catch(() => {});
+							}
+						} catch (e) {}
+					}
 				}
-			}
-		}
-		return fullText;
+			});
+
+			response.body.on("end", () => resolve(fullText));
+			response.body.on("error", (err) => reject(err));
+		});
 	} catch (e) {
 		console.error("Stream Error:", e.message);
-		return onChunk("✨ " + (GOLDEN_DICTIONARY?.[cleanUsername] || "Digital heritage artifact."));
+		const fallback = "✨ " + (GOLDEN_DICTIONARY?.[cleanUsername] || "Digital heritage artifact.");
+		await onChunk(fallback);
+		return fallback;
 	}
 }
 

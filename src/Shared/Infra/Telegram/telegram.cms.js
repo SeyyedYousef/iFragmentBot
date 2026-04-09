@@ -70,8 +70,8 @@ export async function fetchUserVariables(userId, ctx = null) {
 		let lastName = dbUser.lastName || "";
 		let username = dbUser.username || "NoUsername";
 
-		// Try to enrich from Telegram if context is available
-		if (ctx && ctx.from) {
+		// Try to enrich from Telegram if context is available and is a proper Update context
+		if (ctx && ctx.from && typeof ctx.answerCbQuery === 'function') {
 			firstName = ctx.from.first_name || firstName;
 			lastName = ctx.from.last_name || lastName;
 			username = ctx.from.username ? `@${ctx.from.username}` : username;

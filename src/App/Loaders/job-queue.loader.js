@@ -250,7 +250,14 @@ export async function initJobHandlers(bot) {
 		const { username, tonPrice } = data;
 
 		try {
-			await processUsernameReport(chatId, username, tonPrice, bot);
+			// Immediate Feedback
+			const statusMsg = await bot.telegram.sendMessage(chatId, `🔍 *Initializing analysis for @${escapeMD(username)}*...\n_Please wait while I scan the blockchain._`, { parse_mode: "Markdown" });
+			
+			await processUsernameReport(chatId, username, tonPrice, bot, job.userId);
+			
+			// Cleanup status message
+			try { await bot.telegram.deleteMessage(chatId, statusMsg.message_id); } catch {}
+			
 			return { success: true };
 		} catch (error) {
 			console.error("Queue: Username report error:", error);

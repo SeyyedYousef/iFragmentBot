@@ -1,6 +1,6 @@
 import { MongoClient } from "mongodb";
 
-const MONGO_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/ifragment_bot";
+const MONGO_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/ifragment_bot";
 const DB_NAME = "ifragment_bot";
 
 let client = null;

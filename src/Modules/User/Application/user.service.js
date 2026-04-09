@@ -92,17 +92,39 @@ function checkReset(user) {
 	}
 }
 
-export async function useFeature(userId) {
+export async function useFeature(userId, featureKey = "credits", defaultState = null) {
 	const user = await getUser(userId);
 	checkReset(user);
-	if ((user.frgCredits || 0) < COST_PER_REPORT)
-		return { success: false, credits: user.frgCredits };
 
-	user.frgCredits -= COST_PER_REPORT;
-	user.stats.totalReports++;
-	syncUser(userId);
-	return { success: true, credits: user.frgCredits };
+	// Special case for global credits
+	if (featureKey === "credits") {
+		if ((user.frgCredits || 0) < COST_PER_REPORT)
+			return { success: false, credits: user.frgCredits };
+
+		user.frgCredits -= COST_PER_REPORT;
+		user.stats.totalReports++;
+		syncUser(userId);
+		return { success: true, credits: user.frgCredits };
+	}
+
+	// For specific features, check user.features or return success
+	if (!user.features) user.features = {};
+	
+	const featureVal = user.features[featureKey];
+	if (featureVal === undefined) {
+		// New feature? Initialize with default
+		if (defaultState !== null) {
+			user.features[featureKey] = defaultState;
+			syncUser(userId);
+			return { success: true, state: defaultState };
+		}
+		// If no default, assume it's free/allowed for now but don't persist
+		return { success: true, state: true };
+	}
+
+	return { success: !!featureVal, state: featureVal };
 }
+
 
 export async function addFrgCredits(userId, amount, reason = "Activity") {
 	const user = await getUser(userId);

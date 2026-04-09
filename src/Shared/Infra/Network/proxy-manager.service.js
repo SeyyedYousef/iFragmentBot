@@ -189,14 +189,20 @@ export async function testProxy(proxy) {
 	const startTime = Date.now();
 
 	try {
-		// Create a simple SOCKS agent for testing
-		const { SocksProxyAgent } = await import("socks-proxy-agent");
-
+		let agent;
 		const proxyUrl = proxy.username
 			? `${proxy.type}://${proxy.username}:${proxy.password}@${proxy.host}:${proxy.port}`
 			: `${proxy.type}://${proxy.host}:${proxy.port}`;
 
-		const agent = new SocksProxyAgent(proxyUrl);
+		if (proxy.type.startsWith("socks")) {
+			const { SocksProxyAgent } = await import("socks-proxy-agent");
+			agent = new SocksProxyAgent(proxyUrl);
+		} else if (proxy.type.startsWith("http")) {
+			const { HttpsProxyAgent } = await import("https-proxy-agent");
+			agent = new HttpsProxyAgent(proxyUrl);
+		} else {
+			throw new Error(`Unsupported proxy type: ${proxy.type}`);
+		}
 
 		// Try to connect to Telegram API
 		const response = await fetch("https://api.telegram.org/", {
@@ -211,6 +217,7 @@ export async function testProxy(proxy) {
 			success: response.ok,
 			latency,
 		};
+
 	} catch (error) {
 		return {
 			success: false,

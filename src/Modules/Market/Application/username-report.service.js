@@ -24,7 +24,7 @@ import { ensurePersonalWorkspace } from "../../../Shared/Infra/Telegram/telegram
 /**
  * Main process for username analysis
  */
-export async function processUsernameReport(chatId, username, tonPrice, bot) {
+export async function processUsernameReport(chatId, username, tonPrice, bot, userId) {
 	// 1. Check Cache
 	const cached = getCachedReport(username);
 	if (cached) {
@@ -143,6 +143,15 @@ export async function processUsernameReport(chatId, username, tonPrice, bot) {
 	// 5. Build Report & UI
 	const templates = await getTemplates();
 	const globalVars = await fetchUserVariables(userId, bot);
+
+	const caption = buildFullCaption(
+		fragmentData,
+		cardData,
+		currentTonPrice,
+		rarity,
+		estValue,
+		suggestions,
+	);
 	
 	const finalCaption = renderTemplate(templates.usernames || caption, {
 		...globalVars,
