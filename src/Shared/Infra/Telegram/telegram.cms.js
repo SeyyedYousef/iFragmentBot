@@ -70,8 +70,8 @@ export async function fetchUserVariables(userId, ctx = null) {
 		let lastName = dbUser.lastName || "";
 		let username = dbUser.username || "NoUsername";
 
-		// Try to enrich from Telegram if context is available and is a proper Update context
-		if (ctx && ctx.from && typeof ctx.answerCbQuery === 'function') {
+		// Try to enrich from Telegram if context is available
+		if (ctx && ctx.from) {
 			firstName = ctx.from.first_name || firstName;
 			lastName = ctx.from.last_name || lastName;
 			username = ctx.from.username ? `@${ctx.from.username}` : username;
@@ -124,5 +124,31 @@ export const GLOBAL_VARIABLES = [
 	{ key: "BOT_NAME", desc: "The bot's configured name" },
 	{ key: "CREDITS", desc: "Current FRG balance of the user" },
 	{ key: "FRG", desc: "Alias for {CREDITS}" },
-	{ key: "TOTAL_REPORTS", desc: "Total reports user has generated" }
+	{ key: "TOTAL_REPORTS", desc: "Total reports user has generated" },
+	// NEW: Wallet Intelligence (TonAPI)
+	{ key: "WALLET_AGE", desc: "Age of the wallet since first transaction" },
+	{ key: "TX_COUNT", desc: "Total transaction count for the wallet" },
+	{ key: "SCAM_SCORE", desc: "Wallet trust score (0-100)" },
+	{ key: "TOP_JETTONS", desc: "Top 3 Jettons held by balance" },
+	{ key: "DEX_VOLUME", desc: "Wallet trading volume on DEXes" },
+	// NEW: Market Depth (Fragment Internal)
+	{ key: "TOTAL_BIDS", desc: "Number of bids on active auction" },
+	{ key: "BID_INCREMENT", desc: "Minimum next bid step" },
+	{ key: "STARS_PRICE", desc: "Price in Telegram Stars" },
+	{ key: "TOP_BIDDER_WALLET", desc: "Highest bidder's wallet address" },
+	{ key: "HISTORICAL_HOLDERS", desc: "Number of unique previous owners" },
+	// NEW: Collection & Profit
+	{ key: "COLLECTION_HOLDERS", desc: "Total unique holders in collection" },
+	{ key: "MINT_DATE", desc: "Original NFT minting date" },
+	{ key: "PROFIT_LOSS", desc: "Estimate of PnL relative to purchase" },
+	{ key: "RARITY_PERCENT", desc: "Exact rarity percentage in collection" },
+	// --- Trading & Sniper Module ---
+	{ key: "DEAL_SCORE", desc: "Smart deal rating (0-100)" },
+	{ key: "UNDERPRICED_BY", desc: "Percentage listing is below market price" },
+	{ key: "POTENTIAL_PROFIT_TON", desc: "Net profit in TON after fees" },
+	{ key: "POTENTIAL_ROI", desc: "Return on investment percentage" },
+	{ key: "BREAK_EVEN_PRICE", desc: "Minimum sale price to cover costs" },
+	{ key: "SPECIFIC_ATTR_FLOOR", desc: "Floor price for identical attributes" },
+	{ key: "NEXT_CHEAPEST_PRICE", desc: "Price of the next cheapest listing" },
+	{ key: "SNIPER_STATUS", desc: "Current status of the sniper unit" },
 ];

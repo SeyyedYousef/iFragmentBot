@@ -14,6 +14,7 @@ import * as portfolioService from "./portfolio.service.js";
 import { getTemplates } from "../../../Shared/Infra/Database/settings.repository.js";
 import { renderTemplate } from "../../../Shared/Infra/Telegram/telegram.cms.js";
 import * as numbersRepo from "../Infrastructure/numbers.repository.js";
+import { fragmentApiClient } from "../Infrastructure/fragment-api.client.js";
 
 // Global cached numbers CSV data
 let numbersDatabase = null;
@@ -594,24 +595,45 @@ export async function generateNumberReport(input, tonPrice = 5.5) {
 	const { number, numberClean } = parsed;
 	const formattedNumber = formatDisplayNumber(number);
 
-	let floor = tonPriceCache.get("floor888")?.price;
-	if (!floor) {
-		floor = await marketService.get888Stats();
-		if (floor)
-			tonPriceCache.set("floor888", { price: floor, timestamp: Date.now() });
-	}
-	if (!floor) floor = 850;
+	// 🚀 GPU-STYLE PARALLEL EXECUTION 🚀
+	// Launching 7 independent tasks at the exact same millisecond
+	const [
+		floorData,
+		scraped,
+		nftAddress,
+		collectionPulse,
+		marketSample,
+		registeredCheck,
+		extraData,
+		templates,
+		auctionDetails,
+		bidHistory,
+		assetHistory
+	] = await Promise.all([
+		tonPriceCache.get("floor888")?.price ? Promise.resolve(tonPriceCache.get("floor888").price) : marketService.get888Stats(),
+		scrapeFragmentNumber(numberClean),
+		findNFTAddressByNumber(numberClean),
+		fetchGetGemsCollectionPulse(),
+		scrapeMarketSampleNumbers(),
+		telegramClient.checkPhoneNumber(number).catch(() => ({ registered: false })),
+		numbersRepo.getNumberExtraData(numberClean).catch(() => ({ ownerLabel: "Standard Holder", otherNumbersCount: 0 })),
+		getTemplates(),
+		fragmentApiClient.getAuctionDetails(numberClean).catch(() => null),
+		fragmentApiClient.getBidHistory(numberClean).catch(() => null),
+		fragmentApiClient.getAssetHistory(numberClean).catch(() => null),
+	]);
 
-	const scraped = await scrapeFragmentNumber(numberClean);
+	const { ownerLabel, otherNumbersCount } = extraData;
+
 	if (scraped.status === "not_found") throw new Error("Number not minted.");
 
-	// Multi-Market Data
-	const nftAddress = await findNFTAddressByNumber(numberClean);
-	const getgemsData = await fetchGetGemsMarketData(nftAddress);
-	const collectionPulse = await fetchGetGemsCollectionPulse();
+	// Second stage parallel: Fetch market data for address discovered above
+	const getgemsData = nftAddress ? await fetchGetGemsMarketData(nftAddress) : null;
+
+	const floor = floorData || 850;
+	if (floorData) tonPriceCache.set("floor888", { price: floor, timestamp: Date.now() });
 
 	const pattern = analyzeNumberPattern(numberClean, floor);
-	const marketSample = await scrapeMarketSampleNumbers();
 	const model = estimateWithModel({
 		floor,
 		marketSample,
@@ -621,16 +643,8 @@ export async function generateNumberReport(input, tonPrice = 5.5) {
 	});
 
 	const estimated = model.est;
-	const lowEst = Math.round(estimated * 0.75);
-	const highEst = Math.round(estimated * 1.25);
 	const vsFloor = (estimated / floor - 1) * 100;
-
-	let registeredText = "⏳ Unknown";
-	try {
-		const check = await telegramClient.checkPhoneNumber(number);
-		registeredText = check.registered ? "✅ Registered" : "❌ Not Active";
-	} catch (_e) { }
-
+	const registeredText = registeredCheck.registered ? "✅ Registered" : "❌ Not Active";
 	const estUsd = Math.round(estimated * tonPrice);
 	const statusDisplay =
 		scraped.status === "for_sale"
@@ -641,8 +655,7 @@ export async function generateNumberReport(input, tonPrice = 5.5) {
 					? "✅ SOLD"
 					: "🔵 NOT LISTED";
 
-	// Fetch Template from CMS
-	const templates = await getTemplates();
+	// Fetch Template from CMS (Fetched in parallel at start)
 	const reportTemplate = templates.report_number || "📱 <b>{FORMATTED_NUMBER}</b>\n\n💰 <b>Value:</b> {VAL_TON} TON";
 
 	const report = renderTemplate(reportTemplate, {
@@ -675,5 +688,15 @@ export async function generateNumberReport(input, tonPrice = 5.5) {
 		rarityRank: pattern.rarityRank,
 		ownerLabel,
 		otherNumbersCount,
+		// NEW Intelligence Variables
+		TOTAL_BIDS: String(bidHistory?.bids?.length || 0),
+		BID_INCREMENT: String(auctionDetails?.min_step || 5),
+		STARS_PRICE: String(Math.round(estimated * 40)),
+		TOP_BIDDER_WALLET: bidHistory?.bids?.[0]?.owner || "None",
+		HISTORICAL_HOLDERS: String((assetHistory?.transfers?.length || 0) + 1),
+		COLLECTION_HOLDERS: String(collectionPulse?.owners || "Unknown"),
+		MINT_DATE: assetHistory?.transfers?.slice(-1)[0]?.date || "Genesis",
+		RARITY_PERCENT: String((100 - pattern.score / 2).toFixed(1)) + "%",
+		PROFIT_LOSS: scraped.lastSale ? `${Math.round((estimated / scraped.lastSale - 1) * 100)}%` : "0%"
 	};
 }

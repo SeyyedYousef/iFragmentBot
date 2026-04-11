@@ -9,7 +9,7 @@ import PQueue from "p-queue";
 // ==================== CONFIGURATION ====================
 const CONFIG = {
 	// Concurrency limits (optimized for 512MB RAM)
-	MAX_PUPPETEER_CONCURRENCY: 2, // Puppeteer jobs (memory heavy)
+	MAX_PUPPETEER_CONCURRENCY: 1, // Puppeteer jobs (memory heavy, matched to browser pool)
 	MAX_API_CONCURRENCY: 8, // API-only jobs
 	MAX_QUEUE_SIZE: 500, // Max jobs in queue
 

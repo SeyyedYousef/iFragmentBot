@@ -31,9 +31,12 @@ export async function initJobHandlers(bot) {
 		const { chatId, data } = job;
 		const { link, tonPrice } = data;
 
-		const config = await getDashboardConfig();
-		const templates = await getTemplates();
-		const globalVars = await fetchUserVariables(job.userId, bot);
+		const [config, templates, globalVars] = await Promise.all([
+			getDashboardConfig(),
+			getTemplates(),
+			fetchUserVariables(job.userId, bot)
+		]);
+
 		let threadId = null;
 		if (config?.features?.topics_enabled) {
 			const ws = await ensurePersonalWorkspace(bot, chatId);
@@ -57,6 +60,25 @@ export async function initJobHandlers(bot) {
 				FLOOR_TONNEL: String(result.crossMarket?.tonnel?.floor || "N/A"),
 				VOLUME_PORTALS: String(result.crossMarket?.portals?.volume || "N/A"),
 				VOLUME_TONNEL: String(result.crossMarket?.tonnel?.volume || "N/A"),
+				// NEW: Deep Intel
+				TOTAL_BIDS: result.TOTAL_BIDS,
+				BID_INCREMENT: result.BID_INCREMENT,
+				STARS_PRICE: result.STARS_PRICE,
+				TOP_BIDDER_WALLET: result.TOP_BIDDER_WALLET,
+				HISTORICAL_HOLDERS: result.HISTORICAL_HOLDERS,
+				COLLECTION_HOLDERS: result.COLLECTION_HOLDERS,
+				MINT_DATE: result.MINT_DATE,
+				RARITY_PERCENT: result.RARITY_PERCENT,
+				PROFIT_LOSS: result.PROFIT_LOSS,
+				// --- Trading & Sniper ---
+				DEAL_SCORE: result.DEAL_SCORE,
+				UNDERPRICED_BY: result.UNDERPRICED_BY,
+				POTENTIAL_PROFIT_TON: result.POTENTIAL_PROFIT_TON,
+				POTENTIAL_ROI: result.POTENTIAL_ROI,
+				BREAK_EVEN_PRICE: result.BREAK_EVEN_PRICE,
+				SPECIFIC_ATTR_FLOOR: result.SPECIFIC_ATTR_FLOOR,
+				NEXT_CHEAPEST_PRICE: result.NEXT_CHEAPEST_PRICE,
+				SNIPER_STATUS: result.SNIPER_STATUS,
 			});
 
 			// Send textual report
@@ -132,9 +154,12 @@ export async function initJobHandlers(bot) {
 		const { chatId, data } = job;
 		const { input, tonPrice } = data;
 
-		const config = await getDashboardConfig();
-		const templates = await getTemplates();
-		const globalVars = await fetchUserVariables(job.userId, bot);
+		const [config, templates, globalVars] = await Promise.all([
+			getDashboardConfig(),
+			getTemplates(),
+			fetchUserVariables(job.userId, bot)
+		]);
+
 		let threadId = null;
 		if (config?.features?.topics_enabled) {
 			const ws = await ensurePersonalWorkspace(bot, chatId);
@@ -155,7 +180,17 @@ export async function initJobHandlers(bot) {
 				STATUS: result.status,
 				RARITY_GRADE: result.rarityRank || "Standard",
 				OWNER_WALLET: result.owner ? `${result.owner.substring(0, 8)}...${result.owner.slice(-6)}` : "Private",
-				URL: result.url || ""
+				URL: result.url || "",
+				// NEW: Deep Intel
+				TOTAL_BIDS: result.TOTAL_BIDS,
+				BID_INCREMENT: result.BID_INCREMENT,
+				STARS_PRICE: result.STARS_PRICE,
+				TOP_BIDDER_WALLET: result.TOP_BIDDER_WALLET,
+				HISTORICAL_HOLDERS: result.HISTORICAL_HOLDERS,
+				COLLECTION_HOLDERS: result.COLLECTION_HOLDERS,
+				MINT_DATE: result.MINT_DATE,
+				RARITY_PERCENT: result.RARITY_PERCENT,
+				PROFIT_LOSS: result.PROFIT_LOSS
 			});
 
 			await bot.telegram.sendMessage(chatId, finalCaption, {

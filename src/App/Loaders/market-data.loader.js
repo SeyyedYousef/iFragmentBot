@@ -3,6 +3,7 @@ import { get888Stats } from "../../Modules/Market/Application/market.service.js"
 import { getTonMarketStats } from "../../Modules/Market/Infrastructure/fragment.repository.js";
 import { tonPriceCache } from "../../Shared/Infra/Cache/cache.service.js";
 import { processAlerts } from "../../Modules/Alerts/Application/alert.service.js";
+import { marketScanner } from "../../Modules/Market/Application/fragment-scanner.service.js";
 
 const CACHE_FILE = "./market_data_cache.json";
 let backgroundUpdatesStarted = false;
@@ -90,13 +91,24 @@ export function startBackgroundUpdates(bot = null) {
 		}
 	};
 
-	// Run initially
-	updateMarketData();
-	update888Data();
+	// Run initially (Parallel GPU-Style)
+	const tonStats = tonPriceCache.get("marketStats");
+	if (!tonStats || Date.now() - tonStats.timestamp > 3600000) {
+		Promise.all([
+			updateMarketData(),
+			update888Data(),
+			marketScanner.updateIndexes()
+		]);
+	} else {
+		// Run scanner even if ton is cached
+		marketScanner.updateIndexes();
+	}
 
-	// Schedule intervals (Every 10 minutes)
-	setInterval(updateMarketData, 10 * 60 * 1000);
-	setInterval(update888Data, 10 * 60 * 1000);
+	// 🚀 GPU-STYLE LIGHTWEIGHT INTERVAL 🚀
+	// Update hot global market indexes every 45 seconds (only 3 API POSTs total, ~500ms)
+	setInterval(() => {
+		marketScanner.updateIndexes();
+	}, 45000);
 }
 
 /**
@@ -130,5 +142,7 @@ export function getDashboardData() {
 		tonPrice: tonStats.price || 5.5,
 		tonChange: tonStats.change24h || 0,
 		price888: floor888 ? floor888.price : null,
+		marketOverview: marketScanner.getMarketOverview()
 	};
 }
+

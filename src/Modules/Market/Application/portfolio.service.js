@@ -809,6 +809,11 @@ export async function formatPortfolioMessage(portfolio, tonPrice = 5.5) {
 		WALLET: walletShort,
 		BALANCE: String((portfolio.balance || 0).toFixed(2)),
 		RANK: portfolio.intel?.rank || "Collector",
-		ASSETS: assetsList
+		ASSETS: assetsList,
+		WALLET_AGE: portfolio.intel?.walletAge || "Unknown",
+		TX_COUNT: String(portfolio.intel?.txCount || 0),
+		SCAM_SCORE: String(portfolio.intel?.scamScore || 0),
+		TOP_JETTONS: portfolio.intel?.topJettons || "None",
+		DEX_VOLUME: portfolio.intel?.dexVolume || "0 TON",
 	});
 }

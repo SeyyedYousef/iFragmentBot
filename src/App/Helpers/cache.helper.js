@@ -6,7 +6,7 @@
 
 // ==================== USERNAME REPORT CACHE ====================
 const usernameReportCache = new Map(); // username -> { data, timestamp }
-const REPORT_CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
+const REPORT_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours (Optimized for Paid/Premium usage)
 
 /**
  * Get cached username report if available
@@ -38,13 +38,10 @@ export function setCachedReport(username, data) {
 		timestamp: Date.now(),
 	});
 
-	// Limit cache size to 500 entries
+	// Limit cache size to 500 entries (Using Map's insertion order for easy FIFO)
 	if (usernameReportCache.size > 500) {
-		const entries = Array.from(usernameReportCache.entries());
-		entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
-		entries.slice(0, 100).forEach(([k]) => {
-			usernameReportCache.delete(k);
-		});
+		const keysToDelete = Array.from(usernameReportCache.keys()).slice(0, 100);
+		keysToDelete.forEach(k => usernameReportCache.delete(k));
 	}
 
 	console.log(

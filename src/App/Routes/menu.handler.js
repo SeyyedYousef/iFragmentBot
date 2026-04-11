@@ -79,9 +79,11 @@ function registerAccountRoutes(bot, _isAdmin) {
 	bot.action("menu_account", async (ctx) => {
 		await ctx.answerCbQuery();
 		const user = ctx.from;
-		const limits = await getRemainingLimits(user.id);
-		const resetTime = await getTimeUntilReset(user.id);
-		const templates = await getTemplates();
+		const [limits, resetTime, templates] = await Promise.all([
+			getRemainingLimits(user.id),
+			getTimeUntilReset(user.id),
+			getTemplates()
+		]);
 
 		const msg = UI.getAccountMessage(user, limits, resetTime, templates);
 		const kb = UI.getAccountKeyboard();
@@ -125,9 +127,12 @@ function registerAccountRoutes(bot, _isAdmin) {
 
 function registerReportingRoutes(bot, isAdmin) {
 	bot.action("report_username", async (ctx) => {
-		if (!(await checkMembershipOrStop(ctx, bot, isAdmin))) return;
+		const [isMember, templates] = await Promise.all([
+			checkMembershipOrStop(ctx, bot, isAdmin),
+			getTemplates()
+		]);
+		if (!isMember) return;
 		await ctx.answerCbQuery();
-		const templates = await getTemplates();
 		userStates.set(ctx.chat.id, {
 			action: "username_report",
 			timestamp: Date.now(),
@@ -147,9 +152,12 @@ function registerReportingRoutes(bot, isAdmin) {
 	});
 
 	bot.action("report_gifts", async (ctx) => {
-		if (!(await checkMembershipOrStop(ctx, bot, isAdmin))) return;
+		const [isMember, templates] = await Promise.all([
+			checkMembershipOrStop(ctx, bot, isAdmin),
+			getTemplates()
+		]);
+		if (!isMember) return;
 		await ctx.answerCbQuery();
-		const templates = await getTemplates();
 		userStates.set(ctx.chat.id, {
 			action: "gift_report",
 			timestamp: Date.now(),
@@ -169,9 +177,12 @@ function registerReportingRoutes(bot, isAdmin) {
 	});
 
 	bot.action("report_numbers", async (ctx) => {
-		if (!(await checkMembershipOrStop(ctx, bot, isAdmin))) return;
+		const [isMember, templates] = await Promise.all([
+			checkMembershipOrStop(ctx, bot, isAdmin),
+			getTemplates()
+		]);
+		if (!isMember) return;
 		await ctx.answerCbQuery();
-		const templates = await getTemplates();
 		userStates.set(ctx.chat.id, {
 			action: "number_report",
 			timestamp: Date.now(),
@@ -209,10 +220,16 @@ function registerReportingRoutes(bot, isAdmin) {
 
 function registerEngagementRoutes(bot, isAdmin) {
 	bot.action("menu_compare", async (ctx) => {
-		if (!(await checkMembershipOrStop(ctx, bot, isAdmin))) return;
+		const [isMember, canUse, templates] = await Promise.all([
+			checkMembershipOrStop(ctx, bot, isAdmin),
+			canUseFeature(ctx.from.id, "compare"),
+			getTemplates()
+		]);
+		
+		if (!isMember) return;
 		await ctx.answerCbQuery();
-		const uId = ctx.from.id;
-		if (!await canUseFeature(uId, "compare"))
+
+		if (!canUse)
 			return ctx.editMessageText(formatNoCreditsMessage("compare"), {
 				parse_mode: "Markdown",
 				reply_markup: {
@@ -228,7 +245,6 @@ function registerEngagementRoutes(bot, isAdmin) {
 			step: 1,
 			timestamp: Date.now(),
 		});
-		const templates = await getTemplates();
 		ctx.editMessageText(UI.getComparePrompt(templates), {
 			parse_mode: "HTML",
 			reply_markup: {
@@ -250,10 +266,16 @@ function registerEngagementRoutes(bot, isAdmin) {
 
 function registerPortfolioRoutes(bot, isAdmin) {
 	bot.action("menu_portfolio", async (ctx) => {
-		if (!(await checkMembershipOrStop(ctx, bot, isAdmin))) return;
+		const [isMember, canUse, templates] = await Promise.all([
+			checkMembershipOrStop(ctx, bot, isAdmin),
+			canUseFeature(ctx.from.id, "portfolio"),
+			getTemplates()
+		]);
+		
+		if (!isMember) return;
 		await ctx.answerCbQuery();
-		const uId = ctx.from.id;
-		if (!await canUseFeature(uId, "portfolio"))
+
+		if (!canUse)
 			return ctx.editMessageText(formatNoCreditsMessage("portfolio"), {
 				parse_mode: "Markdown",
 				reply_markup: {
@@ -265,7 +287,6 @@ function registerPortfolioRoutes(bot, isAdmin) {
 			});
 
 		userStates.set(ctx.chat.id, { action: "portfolio", timestamp: Date.now() });
-		const templates = await getTemplates();
 		ctx.editMessageText(UI.getPortfolioPrompt(templates), {
 			parse_mode: "HTML",
 			reply_markup: {

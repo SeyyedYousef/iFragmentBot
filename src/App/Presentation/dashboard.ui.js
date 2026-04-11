@@ -41,6 +41,17 @@ export function getDashboardMessage(name, data, credits) {
 	msg += `├ 💎 <b>TON:</b> <code>$${(data.tonPrice || 0).toFixed(2)}</code> ${changeIcon} ${changeText}\n`;
 	msg += `└ 🏴‍☠️ <b>+888:</b> <code>${data.price888 ? `${data.price888.toLocaleString()} TON` : "Updating..."}</code>\n\n`;
 
+	// SuperApp Magic: Injecting Live Global API Indexes
+	if (data.marketOverview && data.marketOverview.hot.length > 0) {
+		const topHot = data.marketOverview.hot.slice(0, 3);
+		msg += `🔥 <b>Hot Auctions (Global Picks):</b>\n`;
+		topHot.forEach((item, index) => {
+			const prefix = index === topHot.length - 1 ? "└ " : "├ ";
+			msg += `${prefix}@${item.username}: <code>${item.priceTon} TON</code>\n`;
+		});
+		msg += `\n🐋 <b>Whale Index (Top 10 Avg):</b> <code>${data.marketOverview.metrics.avgTop10Price} TON</code>\n\n`;
+	}
+
 	msg += `💳 <b>Your Balance:</b> <code>${credits} FRG</code>\n\n`;
 	msg += `💎 <b>How to get FRG?</b>\n`;
 	msg += `Post in <a href="https://t.me/FragmentInvestors">Fragment Investors</a> (+300 FRG per msg!)\n\n`;

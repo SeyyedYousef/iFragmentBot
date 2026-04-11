@@ -14,6 +14,7 @@ import { handleGroupCommand } from "./group.handler.js";
 import { handleMenuTextMessage } from "./menu.handler.js";
 import { handleOperationsTextMessage } from "./operations.handler.js";
 import { handleSettingsTextMessage } from "./settings.handler.js";
+import { GiftVariableService } from "../../Modules/Market/Application/gift-indexer.service.js";
 
 /**
  * Global text routing entry point
@@ -74,7 +75,8 @@ export async function routeTextMessage(ctx, next, bot, getTelegramClient) {
 			}
 
 			// Gift Link Pattern
-			if (parseGiftLink(input).isValid) {
+			const giftAnalysis = await GiftVariableService.analyzeLink(input);
+			if (giftAnalysis.isValid) {
 				return handleGroupCommand(
 					ctx,
 					`!gift ${input}`,

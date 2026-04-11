@@ -131,15 +131,6 @@ bot.help((ctx) =>
 `),
 );
 
-// 3. REGISTER MODULE HANDLERS
-registerAdminHandlers(bot, isAdmin);
-registerMonitorHandlers(bot);
-registerOperationsHandlers(bot);
-registerSettingsHandlers(bot);
-registerMenuHandlers(bot, isAdmin);
-registerFakePanelHandlers(bot, isAdmin);
-registerPanelHandlers(bot, isAdmin);
-registerAccountHandlers(bot);
 
 // 4. GLOBAL MESSAGE ROUTING
 bot.on("inline_query", (ctx) => handleInlineQuery(ctx));
@@ -157,15 +148,19 @@ async function launchBot() {
 		await initJobHandlers(bot); // Reports Queue
 		startBackgroundUpdates(bot); // TON/888 Fetcher
 
+		// 3. REGISTER MODULE HANDLERS
+		registerAdminHandlers(bot, isAdmin);
+		registerMonitorHandlers(bot);
+		registerOperationsHandlers(bot);
+		registerSettingsHandlers(bot);
+		registerMenuHandlers(bot, isAdmin);
+		registerFakePanelHandlers(bot, isAdmin);
+		registerPanelHandlers(bot, isAdmin);
+		registerAccountHandlers(bot);
+
 		console.log("⏳ Clearing Webhook & Launching Polling...");
 		await bot.telegram.deleteWebhook({ drop_pending_updates: true });
 		
-		// Global Error Handler
-		bot.catch((err, ctx) => {
-			console.error(`💥 [Telegraf] Global Error at ${ctx.updateType}:`, err.stack || err);
-			ctx.reply("⚠️ An unexpected error occurred. Please try again later.").catch(() => {});
-		});
-
 		// Explicit poll mode
 		bot.launch({
 			allowedUpdates: ['message', 'callback_query', 'inline_query', 'my_chat_member'],

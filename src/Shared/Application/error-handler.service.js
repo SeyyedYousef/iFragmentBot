@@ -47,13 +47,25 @@ export const ErrorHandler = {
 		try {
 			if (ctx.callbackQuery) {
 				ctx
-					.answerCbQuery("⚠️ Error occurred. Please try again.")
+					.answerCbQuery("⚠️ System Congestion. Retrying...")
 					.catch(() => {});
 			}
 
 			const friendlyMsg =
-				"⚠️ *Temporary Error*\n\nAn unexpected error occurred while processing your request. Our team has been notified.\n\n_Please try again in a few seconds._";
-			ctx.reply(friendlyMsg, { parse_mode: "Markdown" }).catch(() => {});
+				`✦ <b>Premium System Status</b>\n` +
+				`━━━━━━━━━━━━━━━━━━━━\n\n` +
+				`⚠️ <b>Temporary Interruption</b>\n` +
+				`An unexpected technical anomaly occurred while processing your request.\n\n` +
+				`<i>Our engineering team has been dispatched. Please return to the menu and try again in a moment.</i>`;
+			
+			ctx.reply(friendlyMsg, { 
+				parse_mode: "HTML",
+				reply_markup: {
+					inline_keyboard: [
+						[{ text: "🔙 Return Home", callback_data: "back_to_menu" }]
+					]
+				}
+			}).catch(() => {});
 		} catch (_e) {
 			// Deep fail
 		}

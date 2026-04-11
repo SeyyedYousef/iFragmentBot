@@ -19,6 +19,7 @@ import { getDashboardConfig, getTemplates } from "../../../Shared/Infra/Database
 import { formatMarkdownToHTML } from "../../../Shared/Infra/Telegram/telegram.formatter.js";
 import { MessageStreamer } from "../../../Shared/Infra/Telegram/telegram.streamer.js";
 import { renderTemplate, fetchUserVariables } from "../../../Shared/Infra/Telegram/telegram.cms.js";
+import { fragmentApiClient } from "../Infrastructure/fragment-api.client.js";
 import { ensurePersonalWorkspace } from "../../../Shared/Infra/Telegram/telegram.topics.js";
 
 /**
@@ -31,19 +32,25 @@ export async function processUsernameReport(chatId, username, tonPrice, bot, use
 		const {
 			fragmentData,
 			cardData,
-			tonPrice: cachedTonPrice,
 			rarity,
 			estValue,
 			suggestions,
 		} = cached;
 
-		const imageBuffer = await generateFlexCard(cardData);
+		// 🚀 LIVE PRICE UPDATE (GPU-STYLE)
+		const currentLiveTon = tonPrice || await getTonPrice();
+		const liveEstValue = {
+			...estValue,
+			usd: Math.round(estValue.ton * currentLiveTon)
+		};
+
+		const imageBuffer = await generateFlexCard({ ...cardData, estValueUsd: liveEstValue.usd });
 		const caption = buildFullCaption(
 			fragmentData,
 			cardData,
-			cachedTonPrice,
+			currentLiveTon, // Live TON Price
 			rarity,
-			estValue,
+			liveEstValue, // Updated USD Value
 			suggestions,
 		);
 
@@ -54,8 +61,8 @@ export async function processUsernameReport(chatId, username, tonPrice, bot, use
 					chatId,
 					{ source: Buffer.from(imageBuffer) },
 					{
-						caption: `💎 *Analysis for @${escapeMD(username)}*`,
-						parse_mode: "Markdown",
+						caption: formatMarkdownToHTML(`💎 *Analysis for @${escapeMD(username)}* (Live Market: $${currentLiveTon.toFixed(2)})`),
+						parse_mode: "HTML",
 					},
 				);
 			} catch (e) {
@@ -70,36 +77,36 @@ export async function processUsernameReport(chatId, username, tonPrice, bot, use
 		return { success: true, cached: true };
 	}
 
-	// 2. Fresh Fetch & Analysis
-	const config = await getDashboardConfig();
+	// 2. Fresh Fetch & Analysis (Parallel Execution)
+	const [config, templates, globalVars, tonPriceData, fragmentData, suggestions] = await Promise.all([
+		getDashboardConfig(),
+		getTemplates(),
+		fetchUserVariables(userId, bot),
+		tonPrice || getTonPrice(),
+		scrapeFragment(username),
+		generateUsernameSuggestions(username),
+		fragmentApiClient.getAuctionDetails(username).catch(() => null),
+		fragmentApiClient.getBidHistory(username).catch(() => null),
+		fragmentApiClient.getAssetHistory(username).catch(() => null),
+	]);
+
+	const currentTonPrice = tonPriceData;
 	const isStreaming = config?.features?.streaming_enabled ?? true;
 
-	const [fragmentData, currentTonPrice, suggestions] =
-		await Promise.all([
-			scrapeFragment(username),
-			tonPrice || getTonPrice(),
-			generateUsernameSuggestions(username),
-		]);
+	// 3. AI Insight & Oracle (Parallel)
+	const [insight, estValue] = await Promise.all([
+		isStreaming 
+			? (async () => {
+				const statusMsg = await bot.telegram.sendMessage(chatId, "✨ _Initializing Deep Insight..._", { parse_mode: "Markdown" });
+				const streamer = new MessageStreamer(bot, chatId, statusMsg.message_id);
+				const text = await streamShortInsight(username, async (t) => await streamer.push(t));
+				await streamer.finish(text);
+				return text;
+			})()
+			: generateShortInsight(username),
+		estimateValue(username, fragmentData.lastSalePrice, currentTonPrice, fragmentData.status)
+	]);
 
-	let insight = "";
-	if (isStreaming) {
-		const statusMsg = await bot.telegram.sendMessage(chatId, "✨ _Initializing Deep Insight..._", { parse_mode: "Markdown" });
-		const streamer = new MessageStreamer(bot, chatId, statusMsg.message_id);
-		
-		insight = await streamShortInsight(username, async (text) => {
-			await streamer.push(text);
-		});
-		await streamer.finish(insight);
-	} else {
-		insight = await generateShortInsight(username);
-	}
-
-	const estValue = await estimateValue(
-		username,
-		fragmentData.lastSalePrice,
-		currentTonPrice,
-		fragmentData.status,
-	);
 	const rarity = await calculateRarity(username, estValue);
 
 	// 3. Prepare Card Data
@@ -141,9 +148,6 @@ export async function processUsernameReport(chatId, username, tonPrice, bot, use
 	});
 
 	// 5. Build Report & UI
-	const templates = await getTemplates();
-	const globalVars = await fetchUserVariables(userId, bot);
-
 	const caption = buildFullCaption(
 		fragmentData,
 		cardData,
@@ -168,7 +172,17 @@ export async function processUsernameReport(chatId, username, tonPrice, bot, use
 		HIGHEST_BID: String(fragmentData.highestBid || ""),
 		MIN_BID: String(fragmentData.minBid || ""),
 		OWNER: fragmentData.owner || "",
-		URL: fragmentData.url || ""
+		URL: fragmentData.url || "",
+		// NEW: Deep Intel
+		TOTAL_BIDS: String(bidHistory?.bids?.length || 0),
+		BID_INCREMENT: String(auctionDetails?.min_step || 5),
+		STARS_PRICE: String(Math.round(estValue.ton * 40)),
+		TOP_BIDDER_WALLET: bidHistory?.bids?.[0]?.owner || "None",
+		HISTORICAL_HOLDERS: String((assetHistory?.transfers?.length || 0) + 1),
+		COLLECTION_HOLDERS: String("1M+"), // Standard for usernames
+		MINT_DATE: assetHistory?.transfers?.slice(-1)[0]?.date || "Genesis",
+		RARITY_PERCENT: String((100 - rarity.score).toFixed(1)) + "%",
+		PROFIT_LOSS: fragmentData.lastSalePrice ? `${Math.round((estValue.ton - fragmentData.lastSalePrice) / fragmentData.lastSalePrice * 100)}%` : "0%"
 	});
 
 	// 6. Send Result

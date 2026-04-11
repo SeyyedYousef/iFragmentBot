@@ -1,76 +1,89 @@
-﻿# iFragmentBot - Telegram Fragment Username Analyzer
+# 💎 iFragmentBot SuperApp
+### Next-Gen Telegram Asset Indexer & Market Intelligence
 
-## 🚀 Quick Start
+[![TON Blockchain](https://img.shields.io/badge/Blockchain-TON-blue?style=flat-square&logo=blueprint)](https://ton.org)
+[![Platform](https://img.shields.io/badge/Platform-Telegram-0088cc?style=flat-square&logo=telegram)](https://t.me)
+[![Status](https://img.shields.io/badge/Mode-On--chain%20Indexing-success?style=flat-square)](https://tonapi.io)
 
-```bash
-npm install
-npm start
-```
+**iFragmentBot** is a high-performance, real-time indexer for Telegram assets (Usernames, Numbers, and Gifts). Unlike traditional bots that rely on unstable web scraping, iFragmentBot connects directly to the **TON Blockchain** to provide accurate, non-blockable market data.
 
-## 📋 Features
+---
 
-- 💎 Premium Flex Card generation
-- 📊 Real-time Fragment.com data scraping
-- 💰 Price estimation and rarity calculation
-- 💼 Portfolio Tracker (usernames + anonymous numbers)
-- 🔍 Inline Mode - search in any chat
-- 📦 MongoDB analytics (optional)
+## 🚀 Key Features
 
-## 🔧 Environment Variables
+*   **⚡ Real-time Indexing:** Zero dependency on fragment.com frontend. Data is fetched directly from on-chain indexers (TonAPI).
+*   **🎁 Gift Market Mastery:** Accurate floor prices for every specific Telegram Gift model (Doge, Cake, Pepe, etc.) across multiple marketplaces.
+*   **🧩 Dynamic Template Engine:** Full control over bot reports using custom placeholders like `{Floor-tonnel}` or `{Gift-Name}`.
+*   **🖼️ Premium Flex Cards:** Auto-generated, high-fidelity visual reports for high-value assets.
+*   **📊 Cross-Market Analytics:** Aggregated data from **Tonnel.network**, **Portals**, and **GetGems**.
+*   **🧠 Intelligent Resolver:** Simply paste a `t.me/nft/...` link or a contract address, and the bot automatically resolves the model and its live floor.
 
-Create a `.env` file:
+---
 
-```env
-BOT_TOKEN=your_telegram_bot_token
-MONGO_URI=mongodb://localhost:27017
-```
+## 🛠️ Dynamic Variable Guide (Template Engine)
 
-## 🌐 Deploy to Render
+Customize your bot's responses using these live placeholders:
 
-1. Push code to GitHub
-2. Connect repo to [Render.com](https://render.com)
-3. Set environment variables:
-   - `BOT_TOKEN` - Your Telegram bot token
-   - `MONGO_URI` - MongoDB Atlas connection string (optional)
-4. Deploy!
+| Variable | Description | Example Output |
+| :--- | :--- | :--- |
+| `{Floor-global}` | Lowest price of any gift in the entire TON network | `45.5 TON` |
+| `{Floor-tonnel}` | Lowest price specifically on Tonnel.network marketplace | `46.0 TON` |
+| `{Gift-Name}` | The resolved name of a specific gift link | `Plush Pepe` |
+| `{Specific-Floor-Global}` | The floor price for the specific model you linked | `17500 TON` |
+| `{Market-Name}` | The source marketplace of the cheapest item | `Getgems` |
 
-### Render Settings
+---
 
-- **Build Command:** `npm install && npx @puppeteer/browsers install chrome@stable --path .cache`
-- **Start Command:** `npm start`
-- **Instance Type:** Free (or Starter for better performance)
+## 🔧 Technical Architecture
 
-## 📱 Usage
+The bot is built with a modular, **Event-Driven** architecture:
+- **Core:** Node.js + Telegraf (Telegram Bot API)
+- **Data Layer:** SQLite (via Better-SQLite3) for local persistence.
+- **Intelligence Layer:** Custom **GiftIndexer** service with Regex-based Link Resolution.
+- **Provider:** Powered by **TonAPI.io** for reliable on-chain data retrieval.
+- **Styling:** Premium SVG-to-Image generation for Flex Cards.
 
-### Direct Message
-Send any username to get full analysis with Flex Card
+---
 
-### Inline Mode
-Type `@iFragmentBot crypto` in any chat
+## 📥 Installation
 
-### Portfolio Tracker
-Click the button below any analysis to see all assets
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/YourRepo/iFragmentBot.git
+   cd iFragmentBot
+   ```
 
-## 🛠️ Tech Stack
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
 
-- Node.js + Telegraf
-- Puppeteer-core for scraping
-- Scrapling (Python) bridge for stealth scraping
-- Pollinations AI for taglines
-- MongoDB for analytics (optional)
+3. **Configure Environment:**
+   Create a `.env` file based on `.env.example`:
+   ```bash
+   BOT_TOKEN="your_telegram_bot_token"
+   ADMIN_ID="your_telegram_id"
+   DATABASE_PATH="./data/panel.db"
+   ```
 
-## Scrapling Setup
+4. **Launch:**
+   ```bash
+   npm start
+   ```
 
-The Scrapling pathway keeps Fragment scraping stable even when Puppeteer is blocked. To enable it:
+---
 
-1. Install Python 3.10+ with `pip`.
-2. Run `pip install scrapling`.
-3. (Optional) Set `SCRAPLING_PYTHON` if your Python executable is not called `python`.
+## 🌐 Deployment Logic
 
-The bot calls `scripts/scrapling_fragment.py` before falling back to Puppeteer. If Scrapling is missing, it logs a warning and continues with legacy scraping.
+The bot is optimized for 24/7 uptime on **Render**, **Railway**, or **VPS (PM2)**.
+
+- **Non-Scraping:** No need for costly proxies or browser-management overhead.
+- **Stateless Intelligence:** The mapping logic is algorithmic, ensuring ultra-low memory usage even with high concurrent traffic.
+
+---
 
 ## 📄 License
+Proudly developed as a premium tool for the TON ecosystem. Under MIT License.
 
-MIT
-
-
+---
+*Created by Antigravity for iFragment SuperApp Ecosystem.*

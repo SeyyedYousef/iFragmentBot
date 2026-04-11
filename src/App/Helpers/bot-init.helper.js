@@ -1,7 +1,6 @@
 import "dotenv/config";
 import { CONFIG } from "../../core/Config/app.config.js";
 import { initUserService } from "../../Modules/User/Application/user.service.js";
-import { connectDB as connectFirestore } from "../../Shared/Infra/Database/firestore.repository.js";
 import { connectDB as connectMongo } from "../../Shared/Infra/Database/mongo.repository.js";
 
 /**
@@ -40,30 +39,27 @@ export function isAdmin(userId) {
 }
 
 /**
- * Initialize all core services (DB, User Service, etc.)
+ * Initialize all core services (Primary: MongoDB)
  */
 export async function bootstrapServices() {
 	try {
-		console.log("🚀 Bootstrapping core services...");
+		console.log("🚀 [Bootstrap] Initializing MongoDB core...");
 		
-		// 1. Connect MongoDB (Primary Panel DB)
 		const mongo = await connectMongo();
-		if (mongo) console.log("✅ MongoDB Service: Connected");
-		else console.warn("⚠️ MongoDB Service: Falling back to Memory (Not recommended for persistence)");
+		if (!mongo) {
+			throw new Error("MongoDB connection failed! Cannot start bot without primary storage.");
+		}
 
-		// 2. Connect Firestore (Secondary Analytics DB)
-		const firestore = await connectFirestore();
-		if (firestore) console.log("✅ Firestore Service: Connected");
-		else console.warn("ℹ️ Firestore Service: Safe Mode/Disabled");
+		console.log("✅ [Bootstrap] Connected to MongoDB");
 
-		// 3. Init Services
+		// Init internal services
 		await initUserService();
 		
-		console.log("✅ Core bootstrap finalized");
+		console.log("✅ [Bootstrap] All services ready");
 		return true;
 	} catch (error) {
-		console.error("❌ Bootstrap failed critical error:", error.message);
-		throw error;
+		console.error("❌ [Bootstrap] Critical failure:", error.message);
+		process.exit(1); 
 	}
 }
 

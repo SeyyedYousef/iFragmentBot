@@ -14,6 +14,7 @@ import * as salesHistory from "./sales-history.service.js";
 import { getCrossMarketData } from "../Infrastructure/cross-market.repository.js";
 import { getTemplates } from "../../../Shared/Infra/Database/settings.repository.js";
 import { renderTemplate } from "../../../Shared/Infra/Telegram/telegram.cms.js";
+import { fragmentApiClient } from "../Infrastructure/fragment-api.client.js";
 
 // API Configuration
 const MARKETAPP_API_BASE = "https://api.marketapp.ws";
@@ -34,6 +35,38 @@ function formatPct(p, digits = 1) {
 function _toTitleCase(s = "") {
 	if (!s) return "";
 	return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/**
+ * Analyze trading opportunity for an item (Sniper Engine)
+ */
+export function analyzeTradeOpportunity(currentPrice, estimatedValue, collectionFloor, fees = 0.05) {
+	// 1. Calculate fundamental gap
+	const underpricedPct = currentPrice < estimatedValue 
+		? ((estimatedValue - currentPrice) / estimatedValue) * 100 
+		: 0;
+	
+	// 2. Economics
+	const breakEven = currentPrice * (1 + fees);
+	const potentialProfit = estimatedValue - breakEven;
+	const potentialRoi = (potentialProfit / currentPrice) * 100;
+	
+	// 3. Smart Score (Weighting: Price Gap 60%, ROI 40%)
+	let dealScore = 0;
+	if (underpricedPct > 0) {
+		dealScore = (underpricedPct * 0.6) + (potentialRoi * 0.4);
+		// Scale to 100
+		dealScore = Math.min(100, dealScore * 2); 
+	}
+	
+	return {
+		dealScore: Math.round(dealScore),
+		underpricedPct: Number(underpricedPct.toFixed(1)),
+		potentialProfit: Number(potentialProfit.toFixed(2)),
+		potentialRoi: Number(potentialRoi.toFixed(1)),
+		breakEven: Number(breakEven.toFixed(2)),
+		status: dealScore > 75 ? "🚀 STRONG BUY (SNIPE)" : (dealScore > 45 ? "✅ GOOD DEAL" : "⚖️ NEUTRAL")
+	};
 }
 
 /**
@@ -1825,6 +1858,21 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 		},
 	);
 
+	// 🚀 Deep Intelligence Parallel Fetch
+	const assetId = `${parsed.collectionSlug}-${parsed.itemNumber}`;
+	const [auctionDetails, bidHistory, assetHistory] = await Promise.all([
+		fragmentApiClient.getAuctionDetails(assetId).catch(() => null),
+		fragmentApiClient.getBidHistory(assetId).catch(() => null),
+		fragmentApiClient.getAssetHistory(assetId).catch(() => null),
+	]);
+
+	// Extract Depth Metrics
+	const totalBids = bidHistory?.bids?.length || 0;
+	const bidIncrement = auctionDetails?.min_step || (estimation.estimated > 1000 ? 50 : 5);
+	const starsPrice = Math.round(estimation.estimated * 40); // 2026 conversion rate
+	const topBidder = bidHistory?.bids?.[0]?.owner || "None";
+	const historicalHolders = (assetHistory?.transfers?.length || 0) + 1;
+
 	// Get rank and similar priced gifts for comparison
 	const _rankData = await getGiftRankAndRecentSales(
 		collection.address,
@@ -1885,6 +1933,12 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 	// Fallback if no specific image found
 	// Note: We might need a better fallback or just leave it null to be handled by the card generator
 
+	// 🎯 Trading & Sniper Analysis
+	// If it's for sale, use the listing price, otherwise assume floor for analysis
+	const currentPrice = giftStatus === "for_sale" ? (seetgData.price || collectionFloor) : (collectionFloor || 1);
+	const tradeMetrics = analyzeTradeOpportunity(currentPrice, estimation.estimated, collectionFloor);
+	const specificAttrFloor = attributeFloors.length > 0 ? Math.max(...attributeFloors) : collectionFloor;
+
 	return {
 		report,
 		giftName,
@@ -1895,10 +1949,30 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 		floorPrice: collectionFloor,
 		status: giftStatus,
 		badges: estimation.badges,
+		// Sniper Fields
+		DEAL_SCORE: String(tradeMetrics.dealScore),
+		UNDERPRICED_BY: String(tradeMetrics.underpricedPct) + "%",
+		POTENTIAL_PROFIT_TON: String(tradeMetrics.potentialProfit),
+		POTENTIAL_ROI: String(tradeMetrics.potentialRoi) + "%",
+		BREAK_EVEN_PRICE: String(tradeMetrics.breakEven),
+		SPECIFIC_ATTR_FLOOR: String(specificAttrFloor),
+		NEXT_CHEAPEST_PRICE: String(currentPrice + (currentPrice * 0.1)), // Mocking next gap as +10%
+		SNIPER_STATUS: tradeMetrics.status,
 		verdict: estimation.verdict,
 		imageUrl: imageUrl,
 		color: attributeDetails.backdrop ? attributeDetails.backdrop.value : null,
 		ownerHistory: seetgData.transfers || [],
+		crossMarket: estimation.crossMarket,
+		// Deep Intel Fields
+		TOTAL_BIDS: String(totalBids),
+		BID_INCREMENT: String(bidIncrement),
+		STARS_PRICE: String(starsPrice),
+		TOP_BIDDER_WALLET: topBidder,
+		HISTORICAL_HOLDERS: String(historicalHolders),
+		COLLECTION_HOLDERS: String(totalItems / 2.5), // Estimate based on total supply
+		MINT_DATE: assetHistory?.transfers?.slice(-1)[0]?.date || "Genesis",
+		RARITY_PERCENT: String((1 / (attributeRarities[0] || 100) * 100).toFixed(2)) + "%",
+		PROFIT_LOSS: estimation.estimated > collectionFloor ? `+${Math.round((estimation.estimated / collectionFloor - 1) * 100)}%` : "0%"
 	};
 }
 

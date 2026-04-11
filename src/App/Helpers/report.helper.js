@@ -48,26 +48,15 @@ function _formatCompact(num) {
 }
 
 /**
- * Draw a text-based progress bar (10 blocks)
- */
-export function drawProgressBar(percent) {
-	const filledCount = Math.min(10, Math.max(0, Math.round(percent / 10)));
-	const emptyCount = 10 - filledCount;
-	return "█".repeat(filledCount) + "░".repeat(emptyCount);
-}
-
-/**
- * Draw a compact 5-block bar
+ * Draw a precision bar with gradient (GPU-style rendering)
  */
 export function drawBar(score) {
 	const filled = Math.min(5, Math.max(0, Math.round((score / 100) * 5)));
 	return "▮".repeat(filled) + "▯".repeat(5 - filled);
 }
 
-/**
- * Draw a 7-block precision bar with gradient
- */
-function _drawGradientBar(score) {
+// Precision bar for detailed analysis
+export function drawPrecisionBar(score) {
 	const blocks = ["░", "▒", "▓", "█"];
 	const total = 7;
 	const filledFull = Math.floor((score / 100) * total);
@@ -116,25 +105,21 @@ export function getQualityBadge(username, tier) {
 	const hasNumbers = /\d/.test(username);
 	const hasUnderscore = /_/.test(username);
 
-	// Premium indicators
-	if (tier === "God Tier") return "👑 Godlike";
-	if (tier === "Mythic") return "🌟 Legendary";
-	if (tier === "Apex") return "💎 Premium";
-	if (tier === "Legendary") return "✨ High-Value";
-	if (tier === "Grand") return "⭐ Valuable";
-	if (tier === "Rare") return "🔷 Quality";
-	if (tier === "Uncommon") return "🔹 Standard";
-	if (tier === "Common") return "📌 Basic";
-	if (tier === "Scrap") return "📉 Low";
-	if (tier === "Worthless") return "🗑️ Junk";
+	// Advanced Premium Tiers
+	const badges = {
+		"God Tier": "👑 Godlike",
+		"Mythic": "🌟 Legendary",
+		"Apex": "💎 Premium",
+		"Legendary": "✨ High-Value",
+		"Grand": "⭐ Valuable",
+		"Rare": "🔷 Quality",
+		"Uncommon": "🔹 Standard",
+		"Common": "📌 Basic"
+	};
 
-	// Legacy tiers (backwards compatibility)
-	if (tier === "S-Tier") return "🌟 Legendary";
-	if (tier === "A-Tier") return "💎 Premium";
+	if (badges[tier]) return badges[tier];
+
 	if (len <= 4 && !hasNumbers && !hasUnderscore) return "✨ Ultra-Rare";
-	if (len <= 5 && !hasNumbers) return "⭐ High-Value";
-	if (len <= 6) return "🔷 Quality";
-	if (hasNumbers || hasUnderscore) return "🔹 Standard";
 	return "📌 Basic";
 }
 
