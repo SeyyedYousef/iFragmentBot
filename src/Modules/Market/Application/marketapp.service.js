@@ -1463,7 +1463,7 @@ async function getEnhancedRarityData(collectionSlug, model, backdrop, symbol) {
 /**
  * Generate full gift report
  */
-async function generateGiftReport(giftLink, tonPrice = 5.5) {
+async function generateGiftReport(giftLink, tonPrice = 7.2) {
 	const parsed = parseGiftLink(giftLink);
 
 	if (!parsed.isValid) {
@@ -1839,6 +1839,10 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 	]);
 
 	// Estimate value with enhanced algorithm V2.0
+	const attributeRarities = Object.values(attributePercentages);
+	const totalItems = collection.virtual ? 0 : (giftAssetData?.total_amount || 0);
+	const onSale = collection.virtual ? 0 : (gaCap[collection.name]?.on_sale || 0);
+
 	const estimation = estimateGiftValue(
 		collectionFloor,
 		attributeFloors,
@@ -1917,7 +1921,7 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 		NUMBER: String(parsed.itemNumber),
 		PRICE_TON: String(Math.round(estimation.estimated)),
 		VERDICT: estimation.verdict || "Standard",
-		FLOOR_TON: String(Math.round(floorToDisplay)),
+		FLOOR_TON: String(Math.round(collectionFloor)),
 		VAL_USD: formatNumber(Math.round(estimation.estimated * tonPrice)),
 		RARITY_SCORE: String(estimation.avgRarityScore || 0),
 		BADGES: (estimation.badges || []).join(" • "),
@@ -1969,10 +1973,14 @@ async function generateGiftReport(giftLink, tonPrice = 5.5) {
 		STARS_PRICE: String(starsPrice),
 		TOP_BIDDER_WALLET: topBidder,
 		HISTORICAL_HOLDERS: String(historicalHolders),
-		COLLECTION_HOLDERS: String(totalItems / 2.5), // Estimate based on total supply
-		MINT_DATE: assetHistory?.transfers?.slice(-1)[0]?.date || "Genesis",
-		RARITY_PERCENT: String((1 / (attributeRarities[0] || 100) * 100).toFixed(2)) + "%",
-		PROFIT_LOSS: estimation.estimated > collectionFloor ? `+${Math.round((estimation.estimated / collectionFloor - 1) * 100)}%` : "0%"
+		COLLECTION_HOLDERS: String(totalItems || 1000), // Fallback if 0
+		MINT_DATE: (assetHistory?.transfers && assetHistory.transfers.length > 0)
+			? assetHistory.transfers[assetHistory.transfers.length - 1].date
+			: "Genesis",
+		RARITY_PERCENT: String((100 - (estimation.avgRarityScore || 50)).toFixed(1)) + "%",
+		PROFIT_LOSS: (collectionFloor && collectionFloor > 0) 
+			? `${Math.round(((estimation.estimated || 0) - collectionFloor) / collectionFloor * 100)}%` 
+			: "0%"
 	};
 }
 

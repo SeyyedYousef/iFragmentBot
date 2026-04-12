@@ -8,8 +8,9 @@ export const CONFIG = {
 	POLLINATIONS_IMAGE_API: "https://image.pollinations.ai/prompt",
 	BOT_NAME: "@iFragmentBot",
 	ADMIN_ID: 5076130392,
-	LIVE_TON_PRICE: 6.5,
 	GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+	LIVE_TON_PRICE: 7.2, // Fallback price (Actual live price fetched via loader)
+
 
 	// Channel membership settings
 	REQUIRED_CHANNEL: "@FragmentsCommunity",

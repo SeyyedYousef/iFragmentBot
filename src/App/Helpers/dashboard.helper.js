@@ -107,7 +107,7 @@ export async function sendDashboard(ctx, isEdit = false) {
 // -------------------- DATA ORCHESTRATION --------------------
 
 function getMarketPulse() {
-    const ton = tonPriceCache.get("marketStats") || { price: 5.5, change24h: 0, timestamp: 0 };
+    const ton = tonPriceCache.get("marketStats") || { price: CONFIG.LIVE_TON_PRICE || 7.2, change24h: 0, timestamp: 0 };
     const floor888 = tonPriceCache.get("floor888");
 
     return {

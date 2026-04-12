@@ -5,7 +5,7 @@
 
 import fetch from "node-fetch";
 import { Api } from "telegram";
-import * as accountManager from "./accountManagerService.js";
+import * as accountManager from "../../Modules/User/Application/account-manager.service.js";
 
 const THEMES = [
 	"Crypto Market Chat",

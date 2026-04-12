@@ -170,6 +170,104 @@ function registerReceiverRoutes(bot, isAdmin) {
 			await ctx.reply("❌ خطا در دریافت درخواست‌های معلق.");
 		}
 	});
+
+	bot.action("receiver_approved", async (ctx) => {
+		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery();
+		await ctx.answerCbQuery();
+		try {
+			const approved = await receiverService.getApprovedAccounts();
+			if (approved.length === 0) {
+				return ctx.editMessageText("هیچ اکانت تأیید شده‌ای وجود ندارد.", {
+					reply_markup: {
+						inline_keyboard: [
+							[{ text: "🔙 Back", callback_data: "ops_receiver_system" }],
+						],
+					},
+				});
+			}
+
+			const buttons = approved
+				.slice(0, 15)
+				.map((acc) => [
+					{ text: `✅ ${acc.phone}`, callback_data: `view_receiver:${acc.id}` },
+				]);
+			buttons.push([{ text: "🔙 Back", callback_data: "ops_receiver_system" }]);
+			await ctx.editMessageText(`📋 *اکانت‌های تأیید شده*`, {
+				parse_mode: "Markdown",
+				reply_markup: { inline_keyboard: buttons },
+			});
+		} catch (error) {
+			console.error("Receiver Approved Error:", error);
+			await ctx.reply("❌ خطا در دریافت لیست.");
+		}
+	});
+
+	bot.action(/^view_receiver:(.+)$/, async (ctx) => {
+		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery();
+		const id = ctx.match[1];
+		await ctx.answerCbQuery();
+		try {
+			const all = await receiverService.getAllReceivedAccounts();
+			const acc = all.find((a) => a.id === id);
+
+			if (!acc) return ctx.reply("❌ یافت نشد");
+
+			let msg = `📱 *اکانت دریافتی*\n\n`;
+			msg += `• شماره: \`${acc.phone}\`\n`;
+			msg += `• اهدا کننده: \`${acc.donated_by}\`\n`;
+			msg += `• تاریخ: \`${new Date(acc.donated_at).toLocaleString("fa-IR")}\`\n`;
+			msg += `• وضعیت: ${acc.is_approved ? "✅ تأیید شده" : "⏳ در انتظار"}\n`;
+
+			const buttons = [];
+			if (!acc.is_approved) {
+				buttons.push([
+					{ text: "✅ تأیید و افزودن", callback_data: `approve_receiver:${id}` },
+					{ text: "❌ حذف/رد", callback_data: `reject_receiver:${id}` },
+				]);
+			}
+			buttons.push([{ text: "🔙 Back", callback_data: "receiver_pending" }]);
+
+			await ctx.editMessageText(msg, {
+				parse_mode: "Markdown",
+				reply_markup: { inline_keyboard: buttons },
+			});
+		} catch (error) {
+			console.error("View Receiver Error:", error);
+			await ctx.reply("❌ خطا در نمایش جزئیات.");
+		}
+	});
+
+	bot.action(/^approve_receiver:(.+)$/, async (ctx) => {
+		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery();
+		const id = ctx.match[1];
+		await ctx.answerCbQuery("⏳ در حال تأیید...");
+		const res = await receiverService.approveAccount(id);
+		if (res.success) {
+			await ctx.editMessageText("✅ اکانت تأیید و به لیست اصلی اضافه شد.", {
+				reply_markup: {
+					inline_keyboard: [
+						[{ text: "🔙 Back", callback_data: "receiver_pending" }],
+					],
+				},
+			});
+		} else {
+			await ctx.reply(`❌ خطا در تأیید: ${res.error}`);
+		}
+	});
+
+	bot.action(/^reject_receiver:(.+)$/, async (ctx) => {
+		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery();
+		const id = ctx.match[1];
+		await ctx.answerCbQuery("🗑️ در حال رد کردن...");
+		await receiverService.rejectAccount(id);
+		await ctx.editMessageText("🗑️ اکانت با موفقیت حذف شد.", {
+			reply_markup: {
+				inline_keyboard: [
+					[{ text: "🔙 Back", callback_data: "receiver_pending" }],
+				],
+			},
+		});
+	});
 }
 
 // -------------------- REPORT SYSTEM ROUTES --------------------
@@ -178,7 +276,7 @@ function registerReportRoutes(bot, isAdmin) {
 	bot.action("ops_report_system", async (ctx) => {
 		if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery();
 		await ctx.answerCbQuery();
-		const report = reportSystem.generateStatusReport();
+		const report = await reportSystem.generateStatusReport();
 		await ctx.editMessageText(report, {
 			parse_mode: "Markdown",
 			reply_markup: {

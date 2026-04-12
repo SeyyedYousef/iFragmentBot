@@ -150,13 +150,13 @@ async function launchBot() {
 
 		// 3. REGISTER MODULE HANDLERS
 		registerAdminHandlers(bot, isAdmin);
-		registerMonitorHandlers(bot);
-		registerOperationsHandlers(bot);
-		registerSettingsHandlers(bot);
+		registerMonitorHandlers(bot, isAdmin);
+		registerOperationsHandlers(bot, isAdmin);
+		registerSettingsHandlers(bot, isAdmin);
 		registerMenuHandlers(bot, isAdmin);
 		registerFakePanelHandlers(bot, isAdmin);
 		registerPanelHandlers(bot, isAdmin);
-		registerAccountHandlers(bot);
+		registerAccountHandlers(bot, isAdmin);
 
 		console.log("⏳ Clearing Webhook & Launching Polling...");
 		await bot.telegram.deleteWebhook({ drop_pending_updates: true });

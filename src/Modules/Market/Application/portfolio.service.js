@@ -783,7 +783,7 @@ export async function getPortfolio(walletAddress) {
  * @param {number} tonPrice - Current TON price in USD
  * @returns {string} Formatted message
  */
-export async function formatPortfolioMessage(portfolio, tonPrice = 5.5) {
+export async function formatPortfolioMessage(portfolio, tonPrice = 7.2) {
 	if (!portfolio || portfolio.error) {
 		return "❌ Could not fetch portfolio data.";
 	}

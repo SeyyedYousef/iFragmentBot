@@ -1625,7 +1625,7 @@ export async function getTonMarketStats() {
 		return { price: cachedTonStats.price, change24h: cachedTonStats.change24h };
 	}
 
-	return { price: 5.5, change24h: 0 };
+	return { price: 7.2, change24h: 0 };
 }
 
 /**

@@ -1,6 +1,7 @@
 import { getUserGiftsWithValue } from "../../../Shared/Infra/Telegram/telegram.client.js";
 import { getGiftStats } from "../../Market/Application/market.service.js";
 import { getTonPrice } from "../../Market/Infrastructure/fragment.repository.js";
+import { CONFIG } from "../../../core/Config/app.config.js";
 
 // Configuration
 const _CURRENCY = "€";
@@ -150,7 +151,7 @@ export async function handleMeCommand(ctx) {
 				timestamp: Date.now(),
 			};
 		}
-		const tonPrice = tonPriceData?.price || 5.5;
+		const tonPrice = tonPriceData?.price || CONFIG.LIVE_TON_PRICE || 7.2;
 		const euroRate = 0.92;
 
 		// --- Processing & Logic ---

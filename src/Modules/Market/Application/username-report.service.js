@@ -78,7 +78,7 @@ export async function processUsernameReport(chatId, username, tonPrice, bot, use
 	}
 
 	// 2. Fresh Fetch & Analysis (Parallel Execution)
-	const [config, templates, globalVars, tonPriceData, fragmentData, suggestions] = await Promise.all([
+	const [config, templates, globalVars, tonPriceData, fragmentData, suggestions, auctionDetails, bidHistory, assetHistory] = await Promise.all([
 		getDashboardConfig(),
 		getTemplates(),
 		fetchUserVariables(userId, bot),
@@ -164,7 +164,7 @@ export async function processUsernameReport(chatId, username, tonPrice, bot, use
 		VAL_TON: String(estValue.ton),
 		VAL_USD: String(estValue.usd),
 		TIER: rarity.label,
-		CONFIDENCE: String(Math.round((1 - rarity.score / 100) * 100)), // Confidence calculation
+		CONFIDENCE: String(estValue.confidence || 75), // Use actual model confidence
 		REASONING: insight, // Reasoning and definition often overlap in our AI logic
 		STATUS: fragmentData.statusText || fragmentData.status,
 		LAST_SALE: String(fragmentData.lastSalePrice || ""),
@@ -179,10 +179,14 @@ export async function processUsernameReport(chatId, username, tonPrice, bot, use
 		STARS_PRICE: String(Math.round(estValue.ton * 40)),
 		TOP_BIDDER_WALLET: bidHistory?.bids?.[0]?.owner || "None",
 		HISTORICAL_HOLDERS: String((assetHistory?.transfers?.length || 0) + 1),
-		COLLECTION_HOLDERS: String("1M+"), // Standard for usernames
-		MINT_DATE: assetHistory?.transfers?.slice(-1)[0]?.date || "Genesis",
-		RARITY_PERCENT: String((100 - rarity.score).toFixed(1)) + "%",
-		PROFIT_LOSS: fragmentData.lastSalePrice ? `${Math.round((estValue.ton - fragmentData.lastSalePrice) / fragmentData.lastSalePrice * 100)}%` : "0%"
+		COLLECTION_HOLDERS: "1M+", // Standard for usernames
+		MINT_DATE: (assetHistory?.transfers && assetHistory.transfers.length > 0) 
+			? assetHistory.transfers[assetHistory.transfers.length - 1].date 
+			: "Genesis",
+		RARITY_PERCENT: String((100 - (rarity.score || 0)).toFixed(1)) + "%",
+		PROFIT_LOSS: (fragmentData.lastSalePrice && fragmentData.lastSalePrice > 0) 
+			? `${Math.round(((estValue.ton || 0) - fragmentData.lastSalePrice) / fragmentData.lastSalePrice * 100)}%` 
+			: "0%"
 	});
 
 	// 6. Send Result

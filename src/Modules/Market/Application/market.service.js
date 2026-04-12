@@ -264,14 +264,13 @@ export async function getTonPrice() {
 		console.warn("⚠️ TON Price fetch failed:", e.message);
 	}
 
-	// Sanity Check: If price is suspiciously low (e.g. < $0.5 which is impossible), use a hardcoded realistic fallback.
-	// The previous run showed $1.43 which is wrong.
-	if (!price || price < 0.5) {
+	// Sanity Check: If price is suspiciously low (e.g. < $2.0 which is rare now), use a hardcoded realistic fallback.
+	if (!price || price < 2.0) {
 		console.log(
-			`⚠️ Fetched TON price (${price}) is suspicious. Using fallback.`,
+			`⚠️ Fetched TON price (${price}) is suspicious or failed. Using fallback.`,
 		);
-		// Updated fallback to match image ($1.38)
-		return 1.38;
+		// Updated fallback to match current market conditions
+		return 7.2;
 	}
 
 	return price;

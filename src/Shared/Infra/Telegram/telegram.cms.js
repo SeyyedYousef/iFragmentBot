@@ -18,7 +18,7 @@ export function renderTemplate(template, variables = {}) {
 	if (!template) return "";
 
 	// 1. Inject Global Market Data
-	const market = tonPriceCache.get("marketStats") || { price: 5.5, change: 0 };
+	const market = tonPriceCache.get("marketStats") || { price: CONFIG.LIVE_TON_PRICE || 7.2, change: 0 };
 	const floor888 = tonPriceCache.get("floor888") || { price: 0 };
 
 	// 1. Inject Global Time & Date Variables
@@ -39,7 +39,7 @@ export function renderTemplate(template, variables = {}) {
 		BOT_NAME: CONFIG.BOT_NAME || "iFragmentBot",
 		
 		// Market Data (Lower-case versions)
-		ton_price: String(Number(market.tonPrice || market.price || 5.5).toFixed(2)),
+		ton_price: String(Number(market.tonPrice || market.price || CONFIG.LIVE_TON_PRICE || 7.2).toFixed(2)),
 		ton_change: String(Number(market.tonChange || market.change24h || market.change || 0).toFixed(2)),
 		price_888: floor888.price ? `${Number(floor888.price).toLocaleString()} TON` : "Updating...",
 	};

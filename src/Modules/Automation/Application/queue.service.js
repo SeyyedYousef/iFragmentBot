@@ -168,7 +168,7 @@ class JobQueue {
 				if (
 					existingJob &&
 					existingJob.type === type &&
-					existingJob.status === JOB_STATUS.QUEUED
+					(existingJob.status === JOB_STATUS.QUEUED || existingJob.status === JOB_STATUS.PROCESSING)
 				) {
 					throw new Error("You already have a pending request of this type.");
 				}

@@ -28,6 +28,7 @@ import {
 	useFeature,
 } from "../../Modules/User/Application/user.service.js";
 import { tonPriceCache } from "../../Shared/Infra/Cache/cache.service.js";
+import { CONFIG } from "../../core/Config/app.config.js";
 import { escapeMD } from "../Helpers/report.helper.js";
 
 // ==================== TIMEOUT HELPER ====================
@@ -187,7 +188,7 @@ export async function handleGroupCommand(
 
 			try {
 				// Delegate to Job Queue to prevent memory leaks and handle concurrency
-				const tonPrice = tonPriceCache.get("price") || 5.5; // Optimistic price fetch
+				const tonPrice = tonPriceCache.get("price") || CONFIG.LIVE_TON_PRICE || 7.2; // Optimistic price fetch
 				const _isPremiumUser = false; // Legacy premium removed
 
 				const jobData = {
@@ -258,7 +259,7 @@ export async function handleGroupCommand(
 			}
 
 			try {
-				const tonPrice = tonPriceCache.get("price") || 5.5;
+				const tonPrice = tonPriceCache.get("price") || CONFIG.LIVE_TON_PRICE || 7.2;
 				const jobData = { input, tonPrice };
 				const estimatedWait = jobQueue.getEstimatedWait(null);
 
@@ -320,7 +321,7 @@ export async function handleGroupCommand(
 
 			try {
 				// Delegate to Job Queue
-				const tonPrice = tonPriceCache.get("price") || 5.5;
+				const tonPrice = tonPriceCache.get("price") || CONFIG.LIVE_TON_PRICE || 7.2;
 				const _isPremiumUser = false;
 
 				const jobData = {

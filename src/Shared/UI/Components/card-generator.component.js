@@ -631,7 +631,7 @@ export async function generateMarketCard(data) {
 
 					// Handle null prices - show '---' if unavailable
 					const priceAvailable = gift.price != null && gift.price > 0;
-					const exactUsdPrice = gift.price * (data.tonPrice || 5.5);
+					const exactUsdPrice = gift.price * (data.tonPrice || 7.2);
 					const priceUsd = priceAvailable
 						? `$${exactUsdPrice.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
 						: "---";
@@ -680,7 +680,7 @@ export async function generateMarketCard(data) {
 					month: "long",
 				}),
 			);
-			html = html.replace("{{TON_PRICE}}", (data.tonPrice || 5.5).toFixed(2));
+			html = html.replace("{{TON_PRICE}}", (data.tonPrice || 7.2).toFixed(2));
 			html = html.replace(
 				"{{888_PRICE}}",
 				data.price888 ? data.price888.toLocaleString() : "N/A",
@@ -746,7 +746,7 @@ export async function generateWalletCard(data) {
 			const rankEmoji = rankEmojiMap[data.rank] || "🐟";
 
 			// Calculate USD estimate
-			const tonPrice = data.tonPrice || 1.5;
+			const tonPrice = data.tonPrice || CONFIG.LIVE_TON_PRICE || 7.2;
 			const netWorthUsd = Math.round(
 				(data.netWorth || 0) * tonPrice,
 			).toLocaleString();

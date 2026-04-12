@@ -498,7 +498,7 @@ async function fetchGetGemsMarketData(nftAddress) {
 }
 
 async function scrapeMarketSampleNumbers({ limit = 60 } = {}) {
-	const browser = await getBrowser();
+	const browser = await scraplingService.getBrowser();
 	let page = null;
 	try {
 		page = await browser.newPage();
@@ -587,7 +587,7 @@ function estimateWithModel({
 	};
 }
 
-export async function generateNumberReport(input, tonPrice = 5.5) {
+export async function generateNumberReport(input, tonPrice = 7.2) {
 	loadNumbersDatabase();
 	const parsed = parseNumberLink(input);
 	if (!parsed.isValid) throw new Error("Invalid number format.");
@@ -695,8 +695,12 @@ export async function generateNumberReport(input, tonPrice = 5.5) {
 		TOP_BIDDER_WALLET: bidHistory?.bids?.[0]?.owner || "None",
 		HISTORICAL_HOLDERS: String((assetHistory?.transfers?.length || 0) + 1),
 		COLLECTION_HOLDERS: String(collectionPulse?.owners || "Unknown"),
-		MINT_DATE: assetHistory?.transfers?.slice(-1)[0]?.date || "Genesis",
-		RARITY_PERCENT: String((100 - pattern.score / 2).toFixed(1)) + "%",
-		PROFIT_LOSS: scraped.lastSale ? `${Math.round((estimated / scraped.lastSale - 1) * 100)}%` : "0%"
+		MINT_DATE: (assetHistory?.transfers && assetHistory.transfers.length > 0)
+			? assetHistory.transfers[assetHistory.transfers.length - 1].date
+			: "Genesis",
+		RARITY_PERCENT: String((100 - (pattern.score || 0)).toFixed(1)) + "%",
+		PROFIT_LOSS: (scraped.lastSale && scraped.lastSale > 0) 
+			? `${Math.round(((estimated || 0) - scraped.lastSale) / scraped.lastSale * 100)}%` 
+			: "0%"
 	};
 }

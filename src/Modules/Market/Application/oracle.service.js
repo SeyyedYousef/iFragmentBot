@@ -1,31 +1,18 @@
-import fetch from "node-fetch";
 import { CONFIG, GOLDEN_DICTIONARY } from "../../../core/Config/app.config.js";
+import { tonPriceCache } from "../../../Shared/Infra/Cache/cache.service.js";
 import { Lexicon } from "../Domain/lexicon.domain.js";
 import { LIBRARY } from "../Infrastructure/library.repository.js";
 
 /**
- * Fetch live TON price with caching
+ * Get the most accurate TON price available
  */
-let cachedTonPrice = CONFIG.LIVE_TON_PRICE;
-let lastFetchTime = 0;
+export async function getEffectiveTonPrice() {
+	// Try global cache first (updated by background tasks)
+	const cached = tonPriceCache.get("price");
+	if (cached && cached > 0) return cached;
 
-export async function fetchLiveTonPrice() {
-	const now = Date.now();
-	if (now - lastFetchTime < 10 * 60 * 1000) return cachedTonPrice;
-
-	try {
-		const res = await fetch(
-			"https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=usd",
-		);
-		const data = await res.json();
-		if (data["the-open-network"]?.usd) {
-			cachedTonPrice = data["the-open-network"].usd;
-			lastFetchTime = now;
-		}
-	} catch (_e) {
-		console.warn("⚠️ Price fetch failed, using fallback:", cachedTonPrice);
-	}
-	return cachedTonPrice;
+	// Fallback to config
+	return CONFIG.LIVE_TON_PRICE;
 }
 
 export class TheOracle {
@@ -34,11 +21,16 @@ export class TheOracle {
 	 */
 	static async consult(
 		username,
-		tonPrice = CONFIG.LIVE_TON_PRICE,
+		tonPrice = null,
 		externalContext = {},
 	) {
 		const lower = username.replace("@", "").toLowerCase();
 		const len = lower.length;
+
+		// Resolve tonPrice if not provided
+		if (!tonPrice) {
+			tonPrice = tonPriceCache.get("price") || CONFIG.LIVE_TON_PRICE;
+		}
 
 		// 1. AI ORACLE (Hybrid)
 		try {
@@ -238,9 +230,10 @@ export function getSuggestions(_username) {
 export async function estimateValue(
 	username,
 	lastSale = null,
-	tonPrice = CONFIG.LIVE_TON_PRICE,
+	tonPrice = null,
 	status = "Unknown",
 ) {
+	if (!tonPrice) tonPrice = tonPriceCache.get("price") || CONFIG.LIVE_TON_PRICE;
 	return await TheOracle.consult(username, tonPrice, { lastSale, status });
 }
 

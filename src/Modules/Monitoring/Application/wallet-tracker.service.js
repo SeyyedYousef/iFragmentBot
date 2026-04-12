@@ -12,6 +12,7 @@ import { getPortfolio } from "../../Market/Application/portfolio.service.js";
 import * as UI from "../Presentation/wallet.ui.js";
 import { getTemplates } from "../../../Shared/Infra/Database/settings.repository.js";
 import { renderTemplate, fetchUserVariables } from "../../../Shared/Infra/Telegram/telegram.cms.js";
+import { CONFIG } from "../../../core/Config/app.config.js";
 
 // Pagination settings
 const ITEMS_PER_PAGE = 25;
@@ -34,7 +35,7 @@ export async function generateWalletReport(ctx, wallet) {
 		const uCount = portfolio.usernames?.length || 0;
 		const nCount = portfolio.anonymousNumbers?.length || 0;
 		const gCount = portfolio.totalGifts || 0;
-		const tonPrice = tonPriceCache.get("price") || 5.5;
+		const tonPrice = tonPriceCache.get("price") || CONFIG.LIVE_TON_PRICE || 7.2;
 
 		// CMS Logic
 		const templates = await getTemplates();

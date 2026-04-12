@@ -11,7 +11,7 @@ const SCRIPT_PATH = resolve(
 );
 const PYTHON_BIN = process.env.SCRAPLING_PYTHON || "python";
 
-import { getBrowser } from "../../UI/Components/card-generator.component.js";
+export { getBrowser } from "../../UI/Components/card-generator.component.js";
 
 /**
  * Executes the Scrapling bridge script to fetch Fragment HTML.

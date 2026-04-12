@@ -23,9 +23,12 @@ class SpamProtectionService {
 		};
 
 		// Admins who bypass checks
-		const adminIds =
-			CONFIG.ADMIN_IDS || (CONFIG.ADMIN_ID ? [CONFIG.ADMIN_ID] : []);
-		this.admins = new Set(adminIds);
+		const adminIds = [
+			CONFIG.ADMIN_ID,
+			process.env.ADMIN_USER_ID,
+			...(CONFIG.ADMIN_IDS || []),
+		].filter(Boolean);
+		this.admins = new Set(adminIds.map((id) => String(id)));
 
 		// Cleanup interval (every 10 minutes)
 		setInterval(() => this.cleanup(), 10 * 60 * 1000);
@@ -62,7 +65,7 @@ class SpamProtectionService {
 			const userId = ctx.from.id;
 
 			// 1. Bypass Admins
-			if (this.admins.has(userId)) {
+			if (this.admins.has(String(userId))) {
 				return next();
 			}
 
